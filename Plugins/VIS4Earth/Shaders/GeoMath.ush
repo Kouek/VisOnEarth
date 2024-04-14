@@ -1,0 +1,101 @@
+// Author: Kouek Kou
+
+#include "/Engine/Public/Platform.ush"
+
+static const float FloatScale = 1.f / 1048576.f;
+static const float FloatInvScale = 1048576.f;
+
+static const float TwoPi = 2.f * 3.1415926f;
+
+static const float EarthLong = FloatScale * 6378137.f;
+static const float EarthShort = FloatScale * 6356752.314f;
+static const float EarthLongOverShort = EarthLong / EarthShort;
+static const float EarthLongOverShortSqr = EarthLongOverShort * EarthLongOverShort;
+static const float EarthShortOverLong = EarthShort / EarthLong;
+static const float EarthShortOverLongSqr = EarthShortOverLong * EarthShortOverLong;
+static const float EarthShortOverLongSqrMinusOne = EarthShortOverLongSqr - 1.f;
+
+struct Ray {
+    float3 origin;
+    float3 dir;
+};
+
+float4 IntersectEarthShell(
+    in float2 heightToCntrRngEarthLong,
+    in Ray ray) {
+    float1x4 t = float1x4(-1.f, -1.f, -1.f, -1.f);
+
+    float3 tmp = float3(ray.dir.x, ray.dir.y, EarthLongOverShortSqr * ray.dir.z);
+    float a = dot(tmp, ray.dir);
+    float b = 2.f * dot(tmp, ray.origin);
+    tmp = float3(ray.origin.x, ray.origin.y, EarthLongOverShortSqr * ray.origin.z);
+    float c = dot(tmp, ray.origin);
+    
+    int validCnt = 0;
+    [unroll(2)]
+    for (int i = 1; i >= 0; --i) {
+        float Delta = c - heightToCntrRngEarthLong[i] * heightToCntrRngEarthLong[i];
+        Delta = b * b - 4.f * a * Delta;
+        if (Delta < 0.f)
+            continue;
+                
+        Delta = sqrt(Delta);
+        t[0][validCnt++] = (-b - Delta) * .5f / a;
+        t[0][validCnt++] = (-b + Delta) * .5f / a;
+    }
+    if (validCnt == 0)
+        return t;
+    
+    // Possible Cases:
+    // - When validCnt == 4:
+    // -- 0<t[0]<t[2]<t[3]<t[1]: t[0]->t[2], t[3]->t[1]
+    // -- t[0]<0<t[2]<t[3]<t[1]: 0->t[2], t[3]->t[1]
+    // -- t[0]<t[2]<0<t[3]<t[1]: t[3]->t[1]
+    // -- t[0]<t[2]<t[3]<0<t[1]: 0->t[1]
+    // -- t[0]<t[2]<t[3]<t[1]<0: None
+    // - When validCnt == 2:
+    // -- 0<t[0]<t[1]: t[0]->t[1]
+    // -- t[0]<0<t[1]: 0->t[1]
+    // -- t[0]<t[1]<0: None
+    
+    // t[0,1,2,3] = t[0,2,3,1]
+    if (validCnt == 4)
+        t._11_12_13_14 = t._11_13_14_12;
+    int firstIntersectIdx = 0;
+    [unroll(4)]
+    for (; firstIntersectIdx < validCnt; ++firstIntersectIdx)
+        if (t[0][firstIntersectIdx] >= 0.f)
+            break;
+    
+    if (firstIntersectIdx == 1)
+        t._11 = 0.f;
+    else if (firstIntersectIdx == 2)
+        t._11_12_13_14 = t._13_14_11_12;
+    else if (firstIntersectIdx == 3)
+        t._11_12_13_14 = float4(0.f, t._14, t._11, t._12);
+    return t;
+}
+
+float3 BLHToECEF(in float3 BLH) {
+    float3 ret;
+    ret.z = EarthShortOverLong * BLH.z * sin(BLH.y);
+    float cosL = cos(BLH.y);
+    ret.x = BLH.z * cosL * cos(BLH.x);
+    ret.y = BLH.z * cosL * sin(BLH.x);
+    
+    return ret;
+}
+
+float3 ECEFToBLH(in float3 pos) {
+    float3 ret;
+    ret.x = atan2(pos.y, pos.x);
+    ret.z = length(pos);
+    ret.y = asin(EarthLongOverShort * pos.z / ret.z);
+    
+    return ret;
+}
+
+float HeightToCenter(in float heightToCntrEarthLong, in float latitude) {
+    float sinL = sin(latitude);
+    return heightToCntrEarthLong * sqrt(1.f + EarthShortOverLongSqrMinusOne * sinL * sinL);
+}

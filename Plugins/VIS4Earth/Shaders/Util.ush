@@ -1,0 +1,7 @@
+// Author: Kouek Kou
+
+#include "/Engine/Public/Platform.ush"
+
+void GammaCorrect(inout float3 rgb) {
+    rgb = pow(rgb, 1.f / 2.2f);
+}
