@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <map>
+
 #include "CoreMinimal.h"
 #include "Curves/CurveLinearColor.h"
 #include "Engine/VolumeTexture.h"
@@ -43,4 +45,16 @@ class TransferFunctionData {
 
     static TVariant<TTuple<UTexture2D *, UCurveLinearColor *>, FString>
     LoadFromFile(const Desc &Desc);
+    static TOptional<FString> SaveToFile(const UCurveLinearColor *Curve, const FFilePath &FilePath);
+
+    static UTexture2D *FromFlatArrayToTexture(const TArray<FFloat16> &Dat,
+                                              const FName &Name = NAME_None);
+    static void FromFlatArrayToTexture(UTexture2D *Tex, const TArray<FFloat16> &Dat);
+    static UCurveLinearColor *FromPointsToCurve(const std::map<float, FVector4f> &Pnts);
+    static void FromPointsToCurve(UCurveLinearColor *Curve, const std::map<float, FVector4f> &Pnts);
+    static TArray<FFloat16> LerpFromPointsToFlatArray(const std::map<float, FVector4f> &Pnts);
+
+  private:
+    static constexpr auto Resolution = 256;
+    static constexpr auto ElemSz = sizeof(FFloat16) * 4;
 };
