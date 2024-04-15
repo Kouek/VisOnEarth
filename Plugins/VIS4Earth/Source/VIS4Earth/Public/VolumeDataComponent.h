@@ -37,6 +37,10 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     void LoadRAWVolume();
     UFUNCTION(CallInEditor, Category = "VIS4Earth")
     void LoadTF();
+    UFUNCTION(CallInEditor, Category = "VIS4Earth")
+    void SaveTF();
+    UFUNCTION(CallInEditor, Category = "VIS4Earth")
+    void SyncTFCurveTexture();
 
     FOnVolumeDataChanged OnVolumeDataChanged;
 
@@ -48,9 +52,16 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     }
 
   private:
+    static constexpr auto TFResolution = 256;
+    static constexpr auto TFElemSz = sizeof(FFloat16) * 4;
+    static constexpr auto TFMinTime = 0.f;
+    static constexpr auto TFMaxTime = 255.f;
+    static constexpr auto TFMinVal = 0.f;
+    static constexpr auto TFMaxVal = 1.f;
+
     VolumeData::Desc prevVolumeDataDesc;
+    std::map<float, FVector4f> tfPnts;
 
     void createDefaultTFTexture();
-    void fromTFCurveToTexture();
     void processError(const FString &ErrMsg);
 };

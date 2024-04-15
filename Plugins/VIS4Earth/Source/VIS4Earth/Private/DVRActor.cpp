@@ -14,9 +14,18 @@ ADVRActor::ADVRActor() {
 }
 
 void ADVRActor::setupSignalsSlots() {
-    GeoComponent->OnGeographicsChanged.AddLambda([&](UGeoComponent *) { setupRenderer(); });
+    GeoComponent->OnGeographicsChanged.AddLambda(
+        [actor = TWeakObjectPtr<ADVRActor>(this)](UGeoComponent *) {
+            if (!actor.IsValid())
+                return;
+            actor->setupRenderer();
+        });
     VolumeComponent->OnVolumeDataChanged.AddLambda(
-        [&](UVolumeDataComponent *) { setupRenderer(); });
+        [actor = TWeakObjectPtr<ADVRActor>(this)](UVolumeDataComponent *) {
+            if (!actor.IsValid())
+                return;
+            actor->setupRenderer();
+        });
 }
 
 void ADVRActor::setupRenderer() {

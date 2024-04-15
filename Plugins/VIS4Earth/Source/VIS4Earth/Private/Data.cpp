@@ -116,15 +116,12 @@ TransferFunctionData::LoadFromFile(const Desc &Desc) {
     using ValueType = TTuple<UTexture2D *, UCurveLinearColor *>;
     using RetType = TVariant<ValueType, FString>;
 
-    constexpr int Resolution = 256;
-    constexpr auto ElemSz = sizeof(FFloat16) * 4;
-
     FJsonSerializableArray buf;
     if (!FFileHelper::LoadANSITextFileToStrings(*Desc.FilePath.FilePath, nullptr, buf))
         return RetType(TInPlaceType<FString>(), FString::Format(TEXT("Invalid Desc.FilePath {0}."),
                                                                 {Desc.FilePath.FilePath}));
 
-    TMap<float, FVector4f> pnts;
+    std::map<float, FVector4f> pnts;
     for (int i = 0; i < buf.Num(); ++i) {
         if (buf[i].IsEmpty())
             continue;
@@ -143,57 +140,110 @@ TransferFunctionData::LoadFromFile(const Desc &Desc) {
                 FString::Format(TEXT("Invalid contents at line {0} in Desc.FilePath {1}."),
                                 {i + 1, Desc.FilePath.FilePath}));
 
-        auto &v4 = pnts.Add(lnVars[0]);
+        auto &v4 = pnts[lnVars[0]];
         for (int j = 0; j < 4; ++j)
             v4[j] = std::min(std::max(lnVars[j + 1] / 255.f, 0.f), 1.f);
     }
 
-    auto tex = UTexture2D::CreateTransient(Resolution, 1, PF_FloatRGBA, Desc.Name);
-    {
-        TArray<FFloat16> dat;
-        {
-            dat.Reserve(Resolution * 4);
-
-            auto pnt = pnts.CreateIterator();
-            ++pnt;
-            auto prevPnt = pnts.CreateIterator();
-            for (int scalar = 0; scalar < Resolution; ++scalar) {
-                if (scalar > pnt->Key) {
-                    ++prevPnt;
-                    ++pnt;
-                }
-                auto &[s, c] = *pnt;
-                auto &[prevS, prevC] = *prevPnt;
-
-                auto k = s == prevS ? 1.f : (scalar - prevS) / (s - prevS);
-                auto rgba = (1.f - k) * prevC + k * c;
-
-                dat.Emplace(rgba.X);
-                dat.Emplace(rgba.Y);
-                dat.Emplace(rgba.Z);
-                dat.Emplace(rgba.W);
-            }
-        }
-
-        tex->Filter = TextureFilter::TF_Bilinear;
-        tex->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
-        tex->AddressX = tex->AddressY = TextureAddress::TA_Clamp;
-
-        auto *texDat =
-            tex->GetPlatformData()->Mips[0].BulkData.Lock(EBulkDataLockFlags::LOCK_READ_WRITE);
-        FMemory::Memmove(texDat, dat.GetData(), ElemSz * Resolution);
-        tex->GetPlatformData()->Mips[0].BulkData.Unlock();
-        tex->UpdateResource();
-    }
-
-    auto curve = NewObject<UCurveLinearColor>();
-    { 
-        std::array<FRichCurve *, 4> curves = {&curve->FloatCurves[0], &curve->FloatCurves[1],
-                                              &curve->FloatCurves[2], &curve->FloatCurves[3]};
-        for (auto &[scalar, rgba] : pnts)
-            for (int32 i = 0; i < 4; ++i)
-                curves[i]->AddKey(scalar, rgba[i]);
-    }
+    auto tex = FromFlatArrayToTexture(LerpFromPointsToFlatArray(pnts), Desc.Name);
+    auto curve = FromPointsToCurve(pnts);
 
     return RetType(TInPlaceType<ValueType>(), tex, curve);
+}
+
+TOptional<FString> TransferFunctionData::SaveToFile(const UCurveLinearColor *Curve,
+                                                    const FFilePath &FilePath) {
+    if (!Curve)
+        return FString("Invalid Curve.");
+
+    std::map<float, FVector4f> pnts;
+    {
+        std::array<const FRichCurve *, 4> curves = {&Curve->FloatCurves[0], &Curve->FloatCurves[1],
+                                                    &Curve->FloatCurves[2], &Curve->FloatCurves[3]};
+        for (int32 i = 0; i < 4; ++i)
+            for (auto itr = curves[i]->GetKeyIterator(); itr; ++itr) {
+                auto pnt = pnts.find(itr->Time);
+                if (pnt == pnts.end()) {
+                    auto [_pnt, _] = pnts.emplace(itr->Time, Curve->GetLinearColorValue(itr->Time));
+                    pnt = _pnt;
+                }
+                pnt->second[i] = std::clamp(itr->Value * 255.f, 0.f, 255.f);
+            }
+    }
+
+    FJsonSerializableArray buf;
+    for (auto [scalar, rgba] : pnts)
+        buf.Add(
+            FString::Format(TEXT("{0} {1} {2} {3} {4}"), {scalar, rgba.X, rgba.Y, rgba.Z, rgba.W}));
+
+    if (!FFileHelper::SaveStringArrayToFile(buf, *FilePath.FilePath,
+                                            FFileHelper::EEncodingOptions::ForceAnsi))
+        return FString::Format(TEXT("Invalid Desc.FilePath {0}."), {FilePath.FilePath});
+    return {};
+}
+
+void TransferFunctionData::FromFlatArrayToTexture(UTexture2D *Tex, const TArray<FFloat16> &Dat) {
+    auto *texDat =
+        Tex->GetPlatformData()->Mips[0].BulkData.Lock(EBulkDataLockFlags::LOCK_READ_WRITE);
+    FMemory::Memmove(texDat, Dat.GetData(), ElemSz * Resolution);
+    Tex->GetPlatformData()->Mips[0].BulkData.Unlock();
+    Tex->UpdateResource();
+}
+
+UTexture2D *TransferFunctionData::FromFlatArrayToTexture(const TArray<FFloat16> &Dat,
+                                                         const FName &Name) {
+    auto tex = UTexture2D::CreateTransient(Resolution, 1, PF_FloatRGBA, Name);
+
+    tex->Filter = TextureFilter::TF_Bilinear;
+    tex->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
+    tex->AddressX = tex->AddressY = TextureAddress::TA_Clamp;
+    FromFlatArrayToTexture(tex, Dat);
+
+    return tex;
+}
+
+void TransferFunctionData::FromPointsToCurve(UCurveLinearColor *Curve,
+                                             const std::map<float, FVector4f> &Pnts) {
+    Curve->ResetCurve();
+    std::array<FRichCurve *, 4> curves = {&Curve->FloatCurves[0], &Curve->FloatCurves[1],
+                                          &Curve->FloatCurves[2], &Curve->FloatCurves[3]};
+    for (auto &[scalar, rgba] : Pnts)
+        for (int32 i = 0; i < 4; ++i)
+            curves[i]->AddKey(scalar, rgba[i]);
+}
+
+UCurveLinearColor *TransferFunctionData::FromPointsToCurve(const std::map<float, FVector4f> &Pnts) {
+    auto curve = NewObject<UCurveLinearColor>();
+    FromPointsToCurve(curve, Pnts);
+
+    return curve;
+}
+
+TArray<FFloat16>
+TransferFunctionData::LerpFromPointsToFlatArray(const std::map<float, FVector4f> &Pnts) {
+    TArray<FFloat16> dat;
+
+    dat.Reserve(Resolution * 4);
+
+    auto pnt = Pnts.begin();
+    auto prevPnt = pnt;
+    ++pnt;
+    for (int scalar = 0; scalar < Resolution; ++scalar) {
+        if (scalar > pnt->first) {
+            ++prevPnt;
+            ++pnt;
+        }
+        auto &[s, c] = *pnt;
+        auto &[prevS, prevC] = *prevPnt;
+
+        auto k = s == prevS ? 1.f : (scalar - prevS) / (s - prevS);
+        auto rgba = (1.f - k) * prevC + k * c;
+
+        dat.Emplace(rgba.X);
+        dat.Emplace(rgba.Y);
+        dat.Emplace(rgba.Z);
+        dat.Emplace(rgba.W);
+    }
+
+    return dat;
 }
