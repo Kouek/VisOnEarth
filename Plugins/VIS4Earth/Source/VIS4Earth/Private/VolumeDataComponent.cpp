@@ -35,6 +35,8 @@ void UVolumeDataComponent::LoadRAWVolume() {
     prevVolumeDataDesc.VoxTy = ImportVoxelType;
     prevVolumeDataDesc.Dimension = ImportVolumeDimension;
 
+    generateSmoothedVolume();
+
     OnVolumeDataChanged.Broadcast(this);
 }
 
@@ -101,6 +103,22 @@ void UVolumeDataComponent::SyncTFCurveTexture() {
     TransferFunctionData::FromPointsToCurve(TransferFunctionCurve.Get(), tfPnts);
 
     OnVolumeDataChanged.Broadcast(this);
+}
+
+void UVolumeDataComponent::generateSmoothedVolume() {
+    if (!keepSmoothedVolume || !keepVolumeInCPU)
+        return;
+
+    auto smoothedVolume = VolumeData::SmoothFromFlatArray(
+        prevVolumeDataDesc.VoxTy, prevVolumeDataDesc.Dimension, volumeCPUData, NAME_None,
+        std::reference_wrapper(volumeCPUDataSmoothed));
+    if (smoothedVolume.IsType<FString>()) {
+        auto &errMsg = smoothedVolume.Get<FString>();
+        processError(errMsg);
+        return;
+    }
+
+    VolumeTextureSmoothed = smoothedVolume.Get<UVolumeTexture *>();
 }
 
 void UVolumeDataComponent::createDefaultTFTexture() {

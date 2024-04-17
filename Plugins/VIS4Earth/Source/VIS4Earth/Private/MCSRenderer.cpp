@@ -114,9 +114,14 @@ void FMCSRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
 
     grphBldr.AddPass(
         RDG_EVENT_NAME("Draw Marching Square"), shaderParams, ERDGPassFlags::Raster,
-        [shaderParams, vertNum = this->vertNum, primNum = this->primNum,
+        [shaderParams,
+         viewportSz = FIntVector2(PostQpqRndrParams.ViewportRect.Width(),
+                                  PostQpqRndrParams.ViewportRect.Height()),
+         vertNum = this->vertNum, primNum = this->primNum, lnStyl = rndrParams.LineStyle,
          vertexBuffer = this->vertexBuffer,
          indexBuffer = this->indexBuffer](FRHICommandList &RHICmdList) {
+            RHICmdList.SetViewport(0.f, 0.f, 0.f, viewportSz.X, viewportSz.Y, 1.f);
+
             TShaderMapRef<FMCSShaderVS> shaderVS(GetGlobalShaderMap(GMaxRHIFeatureLevel));
             TShaderMapRef<FMCSShaderPS> shaderPS(GetGlobalShaderMap(GMaxRHIFeatureLevel));
 
@@ -126,7 +131,14 @@ void FMCSRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
             graphicsPSOInit.DepthStencilState =
                 TStaticDepthStencilState<true, CF_Greater>::GetRHI();
             graphicsPSOInit.BlendState = TStaticBlendState<>::GetRHI();
-            graphicsPSOInit.PrimitiveType = PT_LineList;
+            switch (lnStyl) {
+            case EMCSLineStyle::Solid:
+                graphicsPSOInit.PrimitiveType = PT_LineList;
+                break;
+            case EMCSLineStyle::Dash:
+                graphicsPSOInit.PrimitiveType = PT_PointList;
+                break;
+            }
             graphicsPSOInit.BoundShaderState.VertexDeclarationRHI =
                 GMCSRendererVertexAttrDeclaration.VertexDeclarationRHI;
             graphicsPSOInit.BoundShaderState.VertexShaderRHI = shaderVS.GetVertexShader();
@@ -137,7 +149,14 @@ void FMCSRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
             SetShaderParameters(RHICmdList, shaderVS, shaderVS.GetVertexShader(), *shaderParams);
 
             RHICmdList.SetStreamSource(0, vertexBuffer, 0);
-            RHICmdList.DrawIndexedPrimitive(indexBuffer, 0, 0, vertNum, 0, primNum, 1);
+            switch (lnStyl) {
+            case EMCSLineStyle::Solid:
+                RHICmdList.DrawIndexedPrimitive(indexBuffer, 0, 0, vertNum, 0, primNum, 1);
+                break;
+            case EMCSLineStyle::Dash:
+                RHICmdList.DrawPrimitive(0, vertNum, 1);
+                break;
+            }
         });
 }
 
@@ -149,7 +168,6 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
     FIntVector3 voxPerVol(Params.VolumeComponent->VolumeTexture->GetSizeX(),
                           Params.VolumeComponent->VolumeTexture->GetSizeY(),
                           Params.VolumeComponent->VolumeTexture->GetSizeZ());
-    auto voxPerVolYxX = static_cast<size_t>(voxPerVol.Y) * voxPerVol.X;
 
     std::unordered_map<uint64, uint32> edge2vertIDs;
     int32_t prevHeightVertNum = 0;
@@ -180,10 +198,10 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
                 continue;
             }
 
-            FVector3f pos(startPos.X + (i == 0 || i == 2 ? omegas[i]
+            FVector3f pos(startPos.X + (i == 0 || i == 2 ? (Params.UseLerp ? omegas[i] : .5f)
                                         : i == 1         ? 1.f
                                                          : 0.f),
-                          startPos.Y + (i == 1 || i == 3 ? omegas[i]
+                          startPos.Y + (i == 1 || i == 3 ? (Params.UseLerp ? omegas[i] : .5f)
                                         : i == 2         ? 1.f
                                                          : 0.f),
                           startPos.Z);
@@ -192,13 +210,13 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
             auto scalar = [&]() {
                 switch (i) {
                 case 0:
-                    return omegas[0] * scalars[0] + omegas[1] * scalars[1];
+                    return omegas[0] * scalars[0] + (1.f - omegas[0]) * scalars[1];
                 case 1:
-                    return omegas[1] * scalars[1] + omegas[2] * scalars[2];
+                    return omegas[1] * scalars[1] + (1.f - omegas[1]) * scalars[2];
                 case 2:
-                    return omegas[2] * scalars[3] + omegas[3] * scalars[2];
+                    return omegas[2] * scalars[3] + (1.f - omegas[2]) * scalars[2];
                 case 3:
-                    return omegas[3] * scalars[0] + omegas[0] * scalars[3];
+                    return omegas[3] * scalars[0] + (1.f - omegas[3]) * scalars[3];
                 }
                 return 0.f;
             }();
@@ -230,7 +248,10 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
                     uint8 cornerState = 0;
                     FVector4f scalars;
                     for (int32 i = 0; i < 4; ++i) {
-                        scalars[i] = Params.VolumeComponent->SampleVolumeCPUData<T>(pos);
+                        scalars[i] =
+                            Params.UseSmoothedVolume
+                                ? Params.VolumeComponent->SampleVolumeCPUDataSmoothed<T>(pos)
+                                : Params.VolumeComponent->SampleVolumeCPUData<T>(pos);
                         if (scalars[i] >= Params.IsoValue)
                             cornerState |= 1 << i;
 
@@ -279,7 +300,7 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
     };
 
     switch (Params.VolumeComponent->GetVolumeVoxelType()) {
-    case ESupportedVoxelType::EUInt8:
+    case ESupportedVoxelType::UInt8:
         gen(uint8(0));
         break;
     }

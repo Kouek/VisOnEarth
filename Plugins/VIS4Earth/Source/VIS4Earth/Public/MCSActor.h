@@ -22,9 +22,15 @@ class VIS4EARTH_API AMCSActor : public AActor {
 
   public:
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
-    FIntVector2 HeightRange = {0, 0};
+    EMCSLineStyle LineStyle = FMCSRenderer::RenderParameters::DefLineStyle;
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
-    float IsoValue = 0.f;
+    bool UseLerp = FMCSRenderer::MCSParameters::DefUseLerp;
+    UPROPERTY(EditAnywhere, Category = "VIS4Earth")
+    bool UseSmoothedVolume = FMCSRenderer::MCSParameters::DefUseSmoothedVolume;
+    UPROPERTY(EditAnywhere, Category = "VIS4Earth")
+    FIntVector2 HeightRange = FMCSRenderer::MCSParameters::DefHeightRange;
+    UPROPERTY(EditAnywhere, Category = "VIS4Earth")
+    float IsoValue = FMCSRenderer::MCSParameters::DefIsoValue;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UGeoComponent> GeoComponent;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
@@ -56,7 +62,13 @@ class VIS4EARTH_API AMCSActor : public AActor {
             return;
 
         auto name = PropChngedEv.MemberProperty->GetFName();
-        if (name == GET_MEMBER_NAME_CHECKED(AMCSActor, HeightRange) ||
+        if (name == GET_MEMBER_NAME_CHECKED(AMCSActor, LineStyle)) {
+            setupRenderer();
+            return;
+        }
+        if (name == GET_MEMBER_NAME_CHECKED(AMCSActor, UseLerp) ||
+            name == GET_MEMBER_NAME_CHECKED(AMCSActor, UseSmoothedVolume) ||
+            name == GET_MEMBER_NAME_CHECKED(AMCSActor, HeightRange) ||
             name == GET_MEMBER_NAME_CHECKED(AMCSActor, IsoValue)) {
             setupRenderer(true);
             return;

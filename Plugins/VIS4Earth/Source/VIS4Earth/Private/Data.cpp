@@ -96,8 +96,80 @@ VolumeData::LoadFromFile(const Desc &Desc,
     };
 
     switch (Desc.VoxTy) {
-    case ESupportedVoxelType::EUInt8:
+    case ESupportedVoxelType::UInt8:
         return load(reinterpret_cast<uint8 *>(buf.GetData()));
+    default:
+        return RetType(TInPlaceType<FString>(), TEXT("Invalid Desc.VoxTy."));
+    }
+}
+
+TVariant<UVolumeTexture *, FString>
+VolumeData::SmoothFromFlatArray(ESupportedVoxelType VoxTy, const FIntVector3 &Dimension,
+                                const TArray<uint8> &VolDat, const FName &Name,
+                                TOptional<std::reference_wrapper<TArray<uint8>>> SmoothedVolOut) {
+    using RetType = TVariant<UVolumeTexture *, FString>;
+
+    auto voxPerVolYxX = static_cast<uint64>(Dimension.Y) * Dimension.X;
+
+    TArray<uint8> buf;
+    buf.SetNum(VolDat.Num());
+
+    auto smoothKernel = [&]<SupportedVoxelType T>(const T *dat, const FIntVector3 &pos) -> T {
+        float scalar = 0.f;
+        int32 num = 0.f;
+        FIntVector3 dPos(pos.X == 0 ? 0 : -1, pos.Y == 0 ? 0 : -1, pos.Z == 0 ? 0 : -1);
+        for (; dPos.Z < (pos.Z == Dimension.Z - 1 ? 1 : 2); ++dPos.Z)
+            for (; dPos.Y < (pos.Y == Dimension.Y - 1 ? 1 : 2); ++dPos.Y)
+                for (; dPos.X < (pos.X == Dimension.X - 1 ? 1 : 2); ++dPos.X) {
+                    auto newPos = pos + dPos;
+                    scalar += dat[newPos.Z * voxPerVolYxX + newPos.Y * Dimension.X + newPos.X];
+                    ++num;
+                }
+        if constexpr (std::is_floating_point_v<T>)
+            return scalar / num;
+        else
+            return static_cast<T>(std::roundf(scalar / num));
+    };
+    auto smooth = [&]<SupportedVoxelType T>(T *newDat, const T *oldDat) -> RetType {
+        int32 idx = 0;
+        FIntVector3 pos;
+        for (pos.Z = 0; pos.Z < Dimension.Z; ++pos.Z)
+            for (pos.Y = 0; pos.Y < Dimension.Y; ++pos.Y)
+                for (pos.X = 0; pos.X < Dimension.X; ++pos.X) {
+                    newDat[idx] = smoothKernel(oldDat, pos);
+                    ++idx;
+                }
+
+        auto volSz = sizeof(T) * Dimension.X * Dimension.Y * Dimension.Z;
+        if (VolDat.Num() != volSz)
+            return RetType(
+                TInPlaceType<FString>(),
+                FString::Format(TEXT("Size of VolDat {0} is not the same as Dimension {1}."),
+                                {VolDat.Num(), Dimension.ToString()}));
+
+        auto tex = UVolumeTexture::CreateTransient(Dimension.X, Dimension.Y, Dimension.Z,
+                                                   GetVoxelPixelFormat(VoxTy), Name);
+        tex->Filter = TextureFilter::TF_Trilinear;
+        tex->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
+        tex->AddressMode = TextureAddress::TA_Clamp;
+
+        auto *texDat =
+            tex->GetPlatformData()->Mips[0].BulkData.Lock(EBulkDataLockFlags::LOCK_READ_WRITE);
+        FMemory::Memcpy(texDat, newDat, volSz);
+        tex->GetPlatformData()->Mips[0].BulkData.Unlock();
+
+        tex->UpdateResource();
+
+        if (SmoothedVolOut.IsSet())
+            SmoothedVolOut->get() = std::move(buf);
+
+        return RetType(TInPlaceType<UVolumeTexture *>(), tex);
+    };
+
+    switch (VoxTy) {
+    case ESupportedVoxelType::UInt8:
+        return smooth(reinterpret_cast<uint8 *>(buf.GetData()),
+                      reinterpret_cast<const uint8 *>(VolDat.GetData()));
     default:
         return RetType(TInPlaceType<FString>(), TEXT("Invalid Desc.VoxTy."));
     }

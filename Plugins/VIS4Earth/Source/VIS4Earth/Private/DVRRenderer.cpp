@@ -79,7 +79,8 @@ void FDVRRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
         return;
     auto &grphBldr = *PostQpqRndrParams.GraphBuilder;
 
-    auto rndrSz = PostQpqRndrParams.ColorTexture->Desc.GetSize();
+    auto rndrSz = FIntVector2(PostQpqRndrParams.ViewportRect.Width(),
+                              PostQpqRndrParams.ViewportRect.Height());
 
     TShaderMapRef<FDVRShader> shader(GetGlobalShaderMap(GMaxRHIFeatureLevel));
     auto shaderParams = grphBldr.AllocParameters<FDVRShader::FParameters>();

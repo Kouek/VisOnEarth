@@ -36,7 +36,8 @@ class VIS4EARTH_API UGeoComponent : public UActorComponent {
 
   private:
     void checkAndCorrectParameters();
-    void processError(const FString &ErrMsg);
+    
+    static void processError(const FString &ErrMsg);
 
 #ifdef WITH_EDITOR
   public:

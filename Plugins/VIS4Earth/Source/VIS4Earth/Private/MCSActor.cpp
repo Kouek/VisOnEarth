@@ -5,6 +5,7 @@ AMCSActor::AMCSActor() {
 
     VolumeComponent = CreateDefaultSubobject<UVolumeDataComponent>(TEXT("VolumeData"));
     VolumeComponent->SetKeepVolumeInCPU(true);
+    VolumeComponent->SetKeepSmoothedVolume(true);
 
     setupRenderer();
     setupSignalsSlots();
@@ -27,7 +28,7 @@ void AMCSActor::setupSignalsSlots() {
 
 void AMCSActor::checkAndCorrectParameters() {
     switch (VolumeComponent->GetVolumeVoxelType()) {
-    case ESupportedVoxelType::EUInt8:
+    case ESupportedVoxelType::UInt8:
         if (IsoValue < 0.f)
             IsoValue = 0.f;
         if (IsoValue > 255.f)
@@ -52,7 +53,7 @@ void AMCSActor::checkAndCorrectParameters() {
 }
 
 void AMCSActor::setupRenderer(bool shouldMarchSquare) {
-     checkAndCorrectParameters();
+    checkAndCorrectParameters();
 
     if (!renderer.IsValid()) {
         renderer = MakeShared<FMCSRenderer>();
@@ -64,13 +65,17 @@ void AMCSActor::setupRenderer(bool shouldMarchSquare) {
                                          .HeightRange = GeoComponent->HeightRange,
                                          .GeoRef = GeoComponent->GeoRef.Get()});
     renderer->SetRenderParameters(
-        {.TransferFunctionTexture = VolumeComponent->TransferFunctionTexture
+        {.LineStyle = LineStyle,
+         .TransferFunctionTexture = VolumeComponent->TransferFunctionTexture
                                         ? VolumeComponent->TransferFunctionTexture.Get()
                                         : VolumeComponent->DefaultTransferFunctionTexture.Get()});
 
     if (shouldMarchSquare)
-        renderer->MarchingSquare(
-            {.HeightRange = HeightRange, .IsoValue = IsoValue, .VolumeComponent = VolumeComponent});
+        renderer->MarchingSquare({.UseLerp = UseLerp,
+                                  .UseSmoothedVolume = UseSmoothedVolume,
+                                  .HeightRange = HeightRange,
+                                  .IsoValue = IsoValue,
+                                  .VolumeComponent = VolumeComponent});
 }
 
 void AMCSActor::destroyRenderer() {

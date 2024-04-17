@@ -26,6 +26,8 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     FIntVector ImportVolumeDimension = VolumeData::Desc::DefDimension;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UVolumeTexture> VolumeTexture;
+    UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
+    TObjectPtr<UVolumeTexture> VolumeTextureSmoothed;
     UPROPERTY(VisibleAnywhere, Transient, Category = "VIS4Earth")
     TObjectPtr<UTexture2D> TransferFunctionTexture;
     UPROPERTY(VisibleAnywhere, Transient, Category = "VIS4Earth")
@@ -47,6 +49,8 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     UVolumeDataComponent() { createDefaultTFTexture(); }
 
     void SetKeepVolumeInCPU(bool Keep) { keepVolumeInCPU = Keep; }
+    void SetKeepSmoothedVolume(bool Keep) { keepSmoothedVolume = Keep; }
+
     const TArray<uint8> &GetVolumeCPUData() const { return volumeCPUData; }
     ESupportedVoxelType GetVolumeVoxelType() const { return prevVolumeDataDesc.VoxTy; }
     FIntVector GetVoxelPerVolume() const { return prevVolumeDataDesc.Dimension; }
@@ -55,12 +59,15 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
         return *(reinterpret_cast<const T *>(volumeCPUData.GetData()) + Pos.Z * voxPerVolYxX +
                  Pos.Y * VolumeTexture->GetSizeX() + Pos.X);
     }
+    template <SupportedVoxelType T> T SampleVolumeCPUDataSmoothed(const FIntVector3 &Pos) {
+        return *(reinterpret_cast<const T *>(volumeCPUDataSmoothed.GetData()) +
+                 Pos.Z * voxPerVolYxX + Pos.Y * VolumeTexture->GetSizeX() + Pos.X);
+    }
 
     void PostLoad() override {
         Super::PostLoad();
         createDefaultTFTexture();
     }
-
 
   private:
     static constexpr auto TFResolution = 256;
@@ -72,10 +79,15 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
 
     size_t voxPerVolYxX;
     bool keepVolumeInCPU = false;
+    bool keepSmoothedVolume = false;
     VolumeData::Desc prevVolumeDataDesc;
+
     TArray<uint8> volumeCPUData;
+    TArray<uint8> volumeCPUDataSmoothed;
     std::map<float, FVector4f> tfPnts;
 
+    void generateSmoothedVolume();
     void createDefaultTFTexture();
-    void processError(const FString &ErrMsg);
+
+    static void processError(const FString &ErrMsg);
 };

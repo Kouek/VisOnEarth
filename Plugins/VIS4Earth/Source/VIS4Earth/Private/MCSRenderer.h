@@ -7,6 +7,12 @@
 #include "Util.h"
 #include "VolumeDataComponent.h"
 
+UENUM()
+enum class EMCSLineStyle : uint8 {
+    Solid = 0 UMETA(DisplayName = "Solid"),
+    Dash UMETA(DisplayName = "Dash")
+};
+
 class VIS4EARTH_API FMCSRenderer : public FGeoRenderer {
   public:
     ~FMCSRenderer() { Unregister(); }
@@ -15,11 +21,14 @@ class VIS4EARTH_API FMCSRenderer : public FGeoRenderer {
     virtual void Unregister() override;
 
     struct RenderParameters {
+        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(EMCSLineStyle, LineStyle, EMCSLineStyle::Solid)
         TWeakObjectPtr<UTexture2D> TransferFunctionTexture;
     };
     void SetRenderParameters(const RenderParameters &Params) { rndrParams = Params; }
 
     struct MCSParameters {
+        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(bool, UseLerp, true)
+        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(bool, UseSmoothedVolume, false)
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(FIntVector2, HeightRange, {0 VIS4EARTH_COMMA 0})
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(float, IsoValue, 0.f)
         TWeakObjectPtr<UVolumeDataComponent> VolumeComponent;
