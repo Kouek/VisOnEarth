@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <functional>
+
 #include <map>
 
 #include "CoreMinimal.h"
@@ -25,7 +27,6 @@ enum class ESupportedVoxelType : uint8 {
 class VolumeData {
   public:
     struct Desc {
-        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(int, LODNum, 2)
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(ESupportedVoxelType, VoxTy, ESupportedVoxelType::ENone)
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(FIntVector3, Axis, {1 VIS4EARTH_COMMA 2 VIS4EARTH_COMMA 3})
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(FIntVector3, Dimension, FIntVector::ZeroValue)
@@ -33,7 +34,36 @@ class VolumeData {
         FName Name;
     };
 
-    static TVariant<UVolumeTexture *, FString> LoadFromFile(const Desc &Desc);
+    static TVariant<UVolumeTexture *, FString>
+    LoadFromFile(const Desc &Desc, TOptional<std::reference_wrapper<TArray<uint8>>> VolumeOut = {});
+
+    static EPixelFormat GetVoxelPixelFormat(ESupportedVoxelType Type) {
+        switch (Type) {
+        case ESupportedVoxelType::EUInt8:
+            return PF_R8;
+        case ESupportedVoxelType::EUInt16:
+            return PF_R16_UINT;
+        case ESupportedVoxelType::EFloat32:
+            return PF_R32_FLOAT;
+        default:
+            break;
+        }
+        return PF_Unknown;
+    }
+
+    static float GetVoxelMaxValue(ESupportedVoxelType Type) {
+        switch (Type) {
+        case ESupportedVoxelType::EUInt8:
+            return std::numeric_limits<uint8>::max();
+        case ESupportedVoxelType::EUInt16:
+            return std::numeric_limits<uint16>::max();
+        case ESupportedVoxelType::EFloat32:
+            return std::numeric_limits<float>::max();
+        default:
+            break;
+        }
+        return 0.f;
+    }
 };
 
 class TransferFunctionData {

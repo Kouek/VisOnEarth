@@ -1,0 +1,55 @@
+// Author: Kouek Kou
+
+#include "/Engine/Public/Platform.ush"
+
+#include "./GeoMath.ush"
+
+float2 LonRng;
+float2 LatRng;
+float2 HeightRng;
+float4x4 EarthToEye;
+SamplerState TFSamplerState;
+Texture2D<float4> TFInput;
+
+struct V2P {
+    float4 Position : SV_POSITION;
+    float Scalar : ATTRIBUTE;
+};
+
+void TransformNormalizedVoxelPositionToBLH(
+    inout float3 NVPosInBLHOut, inout float3 BLHMin,
+    inout float3 BLHDlt, in float2 heightToCntrRngEarthLong) {
+    NVPosInBLHOut.xy = BLHMin.xy + NVPosInBLHOut.xy * BLHDlt.xy;
+    float2 realheightToCntrRng = float2(HeightToCenter(heightToCntrRngEarthLong[0], NVPosInBLHOut.y),
+                    HeightToCenter(heightToCntrRngEarthLong[1], NVPosInBLHOut.y));
+    BLHMin.z = realheightToCntrRng[0];
+    BLHDlt.z = realheightToCntrRng[1] - realheightToCntrRng[0];
+    
+    NVPosInBLHOut.z = BLHMin.z + NVPosInBLHOut.z * BLHDlt.z;
+}
+
+V2P VS(
+	in float3 Position : ATTRIBUTE0,
+	in float Scalar : ATTRIBUTE1) {
+    V2P v2p;
+    v2p.Position = float4(Position, 1.f);
+    v2p.Scalar = Scalar;
+    
+    const float2 heightToCntrRngEarthLong = HeightRng + FloatInvScale * float2(EarthLong, EarthLong);
+    
+    float3 BLHMin = float3(LonRng[0], LatRng[0], -1.f);
+    float3 BLHDlt = float3(LonRng[1] - LonRng[0], LatRng[1] - LatRng[0], 1.f);
+    TransformNormalizedVoxelPositionToBLH(v2p.Position.xyz, BLHMin, BLHDlt, heightToCntrRngEarthLong);
+    v2p.Position.xyz = BLHToECEF(v2p.Position.xyz);
+    v2p.Position = mul(v2p.Position, EarthToEye);
+    
+    return v2p;
+}
+
+float4 PS(in V2P v2p) : SV_Target0 {
+    float4 color = TFInput.SampleLevel(TFSamplerState, float2(v2p.Scalar, .5f), 0);
+    color.a = 1.f;
+    
+    return color;
+}
+

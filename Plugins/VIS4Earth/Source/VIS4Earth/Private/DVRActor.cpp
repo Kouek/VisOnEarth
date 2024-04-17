@@ -31,11 +31,7 @@ void ADVRActor::setupSignalsSlots() {
 void ADVRActor::setupRenderer() {
     if (!renderer.IsValid()) {
         renderer = MakeShared<FDVRRenderer>();
-
-        ENQUEUE_RENDER_COMMAND(RegisterRenderScreenRenderer)
-        ([renderer = this->renderer](FRHICommandListImmediate &RHICmdList) {
-            renderer->Register();
-        });
+        renderer->Register();
     }
 
     renderer->SetGeographicalParameters({.LongtitudeRange = GeoComponent->LongtitudeRange,
@@ -56,7 +52,6 @@ void ADVRActor::destroyRenderer() {
     if (!renderer.IsValid())
         return;
 
-    ENQUEUE_RENDER_COMMAND(UnregisterRenderScreenRenderer)
-    ([renderer = this->renderer](FRHICommandListImmediate &RHICmdList) { renderer->Unregister(); });
+    renderer->Unregister();
     renderer.Reset();
 }

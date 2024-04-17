@@ -7,33 +7,31 @@
 #include "GeoComponent.h"
 #include "VolumeDataComponent.h"
 
-#include "DVRRenderer.h"
+#include "MCSRenderer.h"
 
-#include "DVRActor.generated.h"
+#include "MCSActor.generated.h"
 
 /*
- * Class: ADVRActor
+ * Class: AMCSActor
  * Function:
- * -- Implements Time-Variable Direct Volume Rendering.
+ * -- Implements Marching Square Isopleth Generatiion and Rendering.
  */
 UCLASS()
-class VIS4EARTH_API ADVRActor : public AActor {
+class VIS4EARTH_API AMCSActor : public AActor {
     GENERATED_BODY()
 
   public:
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
-    int MaxStepCount = FDVRRenderer::RenderParameters::DefMaxStepCount;
+    FIntVector2 HeightRange = {0, 0};
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
-    float Step = FDVRRenderer::RenderParameters::DefStep;
-    UPROPERTY(EditAnywhere, Category = "VIS4Earth")
-    float RelativeLightness = FDVRRenderer::RenderParameters::DefRelativeLightness;
+    float IsoValue = 0.f;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UGeoComponent> GeoComponent;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UVolumeDataComponent> VolumeComponent;
 
-    ADVRActor();
-    ~ADVRActor() { destroyRenderer();}
+    AMCSActor();
+    ~AMCSActor() { destroyRenderer(); }
 
     void Destroyed() override {
         Super::Destroyed();
@@ -41,12 +39,14 @@ class VIS4EARTH_API ADVRActor : public AActor {
     }
 
   private:
-    TSharedPtr<FDVRRenderer> renderer;
+    TSharedPtr<FMCSRenderer> renderer;
 
     void setupSignalsSlots();
-    void setupRenderer();
+    void checkAndCorrectParameters();
+    void setupRenderer(bool shouldMarchSquare = false);
     void destroyRenderer();
 
+  private:
 #ifdef WITH_EDITOR
   public:
     virtual void PostEditChangeProperty(struct FPropertyChangedEvent &PropChngedEv) override {
@@ -56,10 +56,9 @@ class VIS4EARTH_API ADVRActor : public AActor {
             return;
 
         auto name = PropChngedEv.MemberProperty->GetFName();
-        if (name == GET_MEMBER_NAME_CHECKED(ADVRActor, MaxStepCount) ||
-            name == GET_MEMBER_NAME_CHECKED(ADVRActor, Step) ||
-            name == GET_MEMBER_NAME_CHECKED(ADVRActor, RelativeLightness)) {
-            setupRenderer();
+        if (name == GET_MEMBER_NAME_CHECKED(AMCSActor, HeightRange) ||
+            name == GET_MEMBER_NAME_CHECKED(AMCSActor, IsoValue)) {
+            setupRenderer(true);
             return;
         }
     }
