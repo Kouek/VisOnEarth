@@ -11,22 +11,30 @@
 void UGeoComponent::checkAndCorrectParameters() {
     if (LongtitudeRange[0] < -180.)
         LongtitudeRange[0] = -180.;
+    if (LongtitudeRange[0] > +180.)
+        LongtitudeRange[0] = +180.;
     if (LongtitudeRange[1] < LongtitudeRange[0])
-        LongtitudeRange[1] = LongtitudeRange[0] + 10.;
+        LongtitudeRange[1] = LongtitudeRange[0];
     if (LongtitudeRange[1] > +180.)
         LongtitudeRange[1] = +180.;
+    if (LongtitudeRange[1] < LongtitudeRange[0])
+        LongtitudeRange[1] = LongtitudeRange[0];
 
     if (LatitudeRange[0] < -90.)
         LatitudeRange[0] = -90.;
+    if (LatitudeRange[0] > +90.)
+        LatitudeRange[0] = +90.;
     if (LatitudeRange[1] < LatitudeRange[0])
-        LatitudeRange[1] = LatitudeRange[0] + 5.;
+        LatitudeRange[1] = LatitudeRange[0];
     if (LatitudeRange[1] > +90.)
         LatitudeRange[1] = +90.;
+    if (LatitudeRange[1] < LatitudeRange[0])
+        LatitudeRange[1] = LatitudeRange[0];
 
     if (HeightRange[0] < 0.)
         HeightRange[0] = 0.;
     if (HeightRange[1] < HeightRange[0])
-        HeightRange[1] = HeightRange[0] + 1000.;
+        HeightRange[1] = HeightRange[0];
 }
 
 void UGeoComponent::processError(const FString &ErrMsg) {
@@ -51,7 +59,7 @@ UStaticMesh *UGeoComponent::GenerateGeoMesh(int32 LongtitudeTessellation,
         return nullptr;
     }
 
-    auto *mesh = NewObject<UStaticMesh>(this);
+    auto *mesh = NewObject<UStaticMesh>();
     mesh->GetStaticMaterials().Add(FStaticMaterial());
 
     FMeshDescription meshDesc;

@@ -19,11 +19,11 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
 
   public:
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
-    ESupportedVoxelType VoxelType = VolumeData::Desc::DefVoxTy;
+    ESupportedVoxelType ImportVoxelType = VolumeData::Desc::DefVoxTy;
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
-    FIntVector VolumeTransformedAxis = VolumeData::Desc::DefAxis;
+    FIntVector ImportVolumeTransformedAxis = VolumeData::Desc::DefAxis;
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
-    FIntVector VolumeDimension = VolumeData::Desc::DefDimension;
+    FIntVector ImportVolumeDimension = VolumeData::Desc::DefDimension;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UVolumeTexture> VolumeTexture;
     UPROPERTY(VisibleAnywhere, Transient, Category = "VIS4Earth")
@@ -46,10 +46,21 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
 
     UVolumeDataComponent() { createDefaultTFTexture(); }
 
+    void SetKeepVolumeInCPU(bool Keep) { keepVolumeInCPU = Keep; }
+    const TArray<uint8> &GetVolumeCPUData() const { return volumeCPUData; }
+    ESupportedVoxelType GetVolumeVoxelType() const { return prevVolumeDataDesc.VoxTy; }
+    FIntVector GetVoxelPerVolume() const { return prevVolumeDataDesc.Dimension; }
+
+    template <SupportedVoxelType T> T SampleVolumeCPUData(const FIntVector3 &Pos) {
+        return *(reinterpret_cast<const T *>(volumeCPUData.GetData()) + Pos.Z * voxPerVolYxX +
+                 Pos.Y * VolumeTexture->GetSizeX() + Pos.X);
+    }
+
     void PostLoad() override {
         Super::PostLoad();
         createDefaultTFTexture();
     }
+
 
   private:
     static constexpr auto TFResolution = 256;
@@ -59,7 +70,10 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     static constexpr auto TFMinVal = 0.f;
     static constexpr auto TFMaxVal = 1.f;
 
+    size_t voxPerVolYxX;
+    bool keepVolumeInCPU = false;
     VolumeData::Desc prevVolumeDataDesc;
+    TArray<uint8> volumeCPUData;
     std::map<float, FVector4f> tfPnts;
 
     void createDefaultTFTexture();

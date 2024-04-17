@@ -9,7 +9,7 @@
 
 #include "CesiumGeoreference.h"
 
-class VIS4EARTH_API FGeoRenderer {
+class VIS4EARTH_API FGeoRenderer : public TSharedFromThis<FGeoRenderer> {
   public:
     virtual ~FGeoRenderer() {}
 

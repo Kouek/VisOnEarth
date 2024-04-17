@@ -15,23 +15,25 @@ void UVolumeDataComponent::LoadRAWVolume() {
     if (files.IsEmpty())
         return;
 
-    auto volume = VolumeData::LoadFromFile({.LODNum = 2,
-                                            .VoxTy = VoxelType,
-                                            .Axis = VolumeTransformedAxis,
-                                            .Dimension = VolumeDimension,
-                                            .FilePath = files[0]});
+    auto volume = keepVolumeInCPU ? VolumeData::LoadFromFile({.VoxTy = ImportVoxelType,
+                                                              .Axis = ImportVolumeTransformedAxis,
+                                                              .Dimension = ImportVolumeDimension,
+                                                              .FilePath = files[0]},
+                                                             std::reference_wrapper(volumeCPUData))
+                                  : VolumeData::LoadFromFile({.VoxTy = ImportVoxelType,
+                                                              .Axis = ImportVolumeTransformedAxis,
+                                                              .Dimension = ImportVolumeDimension,
+                                                              .FilePath = files[0]});
     if (volume.IsType<FString>()) {
         auto &errMsg = volume.Get<FString>();
         processError(errMsg);
-
-        VoxelType = prevVolumeDataDesc.VoxTy;
-        VolumeDimension = prevVolumeDataDesc.Dimension;
         return;
     }
 
     VolumeTexture = volume.Get<UVolumeTexture *>();
-    prevVolumeDataDesc.VoxTy = VoxelType;
-    prevVolumeDataDesc.Dimension = VolumeDimension;
+    voxPerVolYxX = static_cast<size_t>(ImportVolumeDimension.X) * ImportVolumeDimension.Y;
+    prevVolumeDataDesc.VoxTy = ImportVoxelType;
+    prevVolumeDataDesc.Dimension = ImportVolumeDimension;
 
     OnVolumeDataChanged.Broadcast(this);
 }

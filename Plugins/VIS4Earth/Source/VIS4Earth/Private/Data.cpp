@@ -4,7 +4,9 @@
 
 #include <array>
 
-TVariant<UVolumeTexture *, FString> VolumeData::LoadFromFile(const Desc &Desc) {
+TVariant<UVolumeTexture *, FString>
+VolumeData::LoadFromFile(const Desc &Desc,
+                         TOptional<std::reference_wrapper<TArray<uint8>>> VolumeOut) {
     using RetType = TVariant<UVolumeTexture *, FString>;
 
     if (Desc.Dimension.X <= 0 || Desc.Dimension.Y <= 0 || Desc.Dimension.Z <= 0)
@@ -16,19 +18,7 @@ TVariant<UVolumeTexture *, FString> VolumeData::LoadFromFile(const Desc &Desc) {
         return RetType(TInPlaceType<FString>(), FString::Format(TEXT("Invalid Desc.FilePath {0}."),
                                                                 {Desc.FilePath.FilePath}));
 
-    auto pixFmt = [&]() {
-        switch (Desc.VoxTy) {
-        case ESupportedVoxelType::EUInt8:
-            return PF_R8;
-        case ESupportedVoxelType::EUInt16:
-            return PF_R16_UINT;
-        case ESupportedVoxelType::EFloat32:
-            return PF_R32_FLOAT;
-        default:
-            break;
-        }
-        return PF_Unknown;
-    }();
+    auto pixFmt = GetVoxelPixelFormat(Desc.VoxTy);
     auto transform = [&]() {
         using TrRetType = TVariant<FIntVector3, FString>;
 
@@ -89,8 +79,7 @@ TVariant<UVolumeTexture *, FString> VolumeData::LoadFromFile(const Desc &Desc) {
 
         auto tex = UVolumeTexture::CreateTransient(trDim.X, trDim.Y, trDim.Z, pixFmt, Desc.Name);
         tex->Filter = TextureFilter::TF_Trilinear;
-        tex->MipGenSettings = Desc.LODNum == 1 ? TextureMipGenSettings::TMGS_NoMipmaps
-                                               : TextureMipGenSettings::TMGS_SimpleAverage;
+        tex->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
         tex->AddressMode = TextureAddress::TA_Clamp;
 
         auto *texDat =
@@ -99,6 +88,9 @@ TVariant<UVolumeTexture *, FString> VolumeData::LoadFromFile(const Desc &Desc) {
         tex->GetPlatformData()->Mips[0].BulkData.Unlock();
 
         tex->UpdateResource();
+
+        if (VolumeOut.IsSet())
+            VolumeOut->get() = std::move(buf);
 
         return RetType(TInPlaceType<UVolumeTexture *>(), tex);
     };

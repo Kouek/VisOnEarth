@@ -23,7 +23,7 @@ RWTexture2D<float4> ColorOutput;
 
 void TransformBLHToSamplePos(
     inout float3 BLHInSamplePosOut, inout float3 BLHMin,
-    in float3 BLHInvDlt, in float2 heightToCntrRngEarthLong) {
+    inout float3 BLHInvDlt, in float2 heightToCntrRngEarthLong) {
     float2 realheightToCntrRng = float2(HeightToCenter(heightToCntrRngEarthLong[0], BLHInSamplePosOut.y),
                     HeightToCenter(heightToCntrRngEarthLong[1], BLHInSamplePosOut.y));
     BLHMin.z = realheightToCntrRng[0];

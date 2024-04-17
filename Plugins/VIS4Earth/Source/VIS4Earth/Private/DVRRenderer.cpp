@@ -38,7 +38,6 @@ class VIS4EARTH_API FDVRShader : public FGlobalShader {
     SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, ColorOutput)
     END_SHADER_PARAMETER_STRUCT()
 
-  public:
     static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters &Parameters) {
         return true;
     }
@@ -56,16 +55,22 @@ IMPLEMENT_GLOBAL_SHADER(FDVRShader, "/VIS4Earth/DVR.usf", "DVR", SF_Compute);
 void FDVRRenderer::Register() {
     Unregister();
 
-    onPostOpaqueRender = GetRendererModule().RegisterPostOpaqueRenderDelegate(
-        FPostOpaqueRenderDelegate::CreateRaw(this, &FDVRRenderer::render));
+    ENQUEUE_RENDER_COMMAND(RegisterRenderScreenRenderer)
+    ([renderer = SharedThis(this)](FRHICommandListImmediate &RHICmdList) {
+        renderer->onPostOpaqueRender = GetRendererModule().RegisterPostOpaqueRenderDelegate(
+            FPostOpaqueRenderDelegate::CreateRaw(&renderer.Get(), &FDVRRenderer::render));
+    });
 }
 
 void FDVRRenderer::Unregister() {
     if (!onPostOpaqueRender.IsValid())
         return;
 
-    GetRendererModule().RemovePostOpaqueRenderDelegate(onPostOpaqueRender);
-    onPostOpaqueRender.Reset();
+    ENQUEUE_RENDER_COMMAND(UnregisterRenderScreenRenderer)
+    ([renderer = SharedThis(this)](FRHICommandListImmediate &RHICmdList) {
+        GetRendererModule().RemovePostOpaqueRenderDelegate(renderer->onPostOpaqueRender);
+        renderer->onPostOpaqueRender.Reset();
+    });
 }
 
 void FDVRRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
