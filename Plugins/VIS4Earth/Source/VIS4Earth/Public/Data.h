@@ -4,8 +4,6 @@
 
 #include <functional>
 
-#include <map>
-
 #include "CoreMinimal.h"
 #include "Curves/CurveLinearColor.h"
 #include "Engine/VolumeTexture.h"
@@ -23,23 +21,40 @@ enum class ESupportedVoxelType : uint8 {
     UInt16 UMETA(DisplayName = "Unsigned Int 16 bit"),
     Float32 UMETA(DisplayName = "Float 32 bit")
 };
+UENUM()
+enum class ESmoothType : uint8 {
+    Avg = 0 UMETA(DisplayName = "Average"),
+    Max UMETA(DisplayName = "Maximum")
+};
+UENUM()
+enum class ESmoothDimension : uint8 {
+    XYZ = 0 UMETA(DisplayName = "Smooth over XYZ Sapce"),
+    XY UMETA(DisplayName = "Smooth over XY Plane")
+};
 
 class VolumeData {
   public:
-    struct Desc {
+    struct LoadFromFileDesc {
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(ESupportedVoxelType, VoxTy, ESupportedVoxelType::None)
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(FIntVector3, Axis, {1 VIS4EARTH_COMMA 2 VIS4EARTH_COMMA 3})
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(FIntVector3, Dimension, FIntVector::ZeroValue)
         FFilePath FilePath;
         FName Name;
     };
-
     static TVariant<UVolumeTexture *, FString>
-    LoadFromFile(const Desc &Desc, TOptional<std::reference_wrapper<TArray<uint8>>> VolumeOut = {});
+    LoadFromFile(const LoadFromFileDesc &Desc,
+                 TOptional<std::reference_wrapper<TArray<uint8>>> VolumeOut = {});
 
+    struct SmoothFromFlatArrayDesc {
+        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(ESmoothType, SmoothTy, ESmoothType::Avg)
+        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(ESmoothDimension, SmoothDim, ESmoothDimension::XYZ)
+        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(ESupportedVoxelType, VoxTy, ESupportedVoxelType::None)
+        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(FIntVector3, Dimension, FIntVector::ZeroValue)
+        const TArray<uint8> &VolDat;
+        FName Name;
+    };
     static TVariant<UVolumeTexture *, FString>
-    SmoothFromFlatArray(ESupportedVoxelType VoxTy, const FIntVector3 &Dimension,
-                        const TArray<uint8> &VolDat, const FName &Name = NAME_None,
+    SmoothFromFlatArray(const SmoothFromFlatArrayDesc &Desc,
                         TOptional<std::reference_wrapper<TArray<uint8>>> SmoothedVolOut = {});
 
     static EPixelFormat GetVoxelPixelFormat(ESupportedVoxelType Type) {
@@ -70,18 +85,20 @@ class VolumeData {
         return 0;
     }
 
-    static float GetVoxelMaxValue(ESupportedVoxelType Type) {
+    static TTuple<float, float, float> GetVoxelMinMaxExtent(ESupportedVoxelType Type) {
         switch (Type) {
         case ESupportedVoxelType::UInt8:
-            return std::numeric_limits<uint8>::max();
+            return MakeTuple(0.f, static_cast<float>(std::numeric_limits<uint8>::max()),
+                             static_cast<float>(std::numeric_limits<uint8>::max()));
         case ESupportedVoxelType::UInt16:
-            return std::numeric_limits<uint16>::max();
+            return MakeTuple(0.f, static_cast<float>(std::numeric_limits<uint16>::max()),
+                             static_cast<float>(std::numeric_limits<uint16>::max()));
         case ESupportedVoxelType::Float32:
-            return std::numeric_limits<float>::max();
+            return MakeTuple(0.f, 1.f, 1.f);
         default:
             break;
         }
-        return 0.f;
+        return MakeTuple(0.f, 0.f, 1.f);
     }
 };
 
@@ -99,9 +116,9 @@ class TransferFunctionData {
     static UTexture2D *FromFlatArrayToTexture(const TArray<FFloat16> &Dat,
                                               const FName &Name = NAME_None);
     static void FromFlatArrayToTexture(UTexture2D *Tex, const TArray<FFloat16> &Dat);
-    static UCurveLinearColor *FromPointsToCurve(const std::map<float, FVector4f> &Pnts);
-    static void FromPointsToCurve(UCurveLinearColor *Curve, const std::map<float, FVector4f> &Pnts);
-    static TArray<FFloat16> LerpFromPointsToFlatArray(const std::map<float, FVector4f> &Pnts);
+    static UCurveLinearColor *FromPointsToCurve(const TMap<float, FVector4f> &Pnts);
+    static void FromPointsToCurve(UCurveLinearColor *Curve, const TMap<float, FVector4f> &Pnts);
+    static TArray<FFloat16> LerpFromPointsToFlatArray(const TMap<float, FVector4f> &Pnts);
 
   private:
     static constexpr auto Resolution = 256;

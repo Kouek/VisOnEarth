@@ -168,6 +168,8 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
     FIntVector3 voxPerVol(Params.VolumeComponent->VolumeTexture->GetSizeX(),
                           Params.VolumeComponent->VolumeTexture->GetSizeY(),
                           Params.VolumeComponent->VolumeTexture->GetSizeZ());
+    auto [vxMin, vxMax, vxExt] =
+        VolumeData::GetVoxelMinMaxExtent(Params.VolumeComponent->GetVolumeVoxelType());
 
     std::unordered_map<uint64, uint32> edge2vertIDs;
     int32_t prevHeightVertNum = 0;
@@ -220,7 +222,7 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
                 }
                 return 0.f;
             }();
-            scalar /= VolumeData::GetVoxelMaxValue(Params.VolumeComponent->GetVolumeVoxelType());
+            scalar = (scalar - vxMin) / vxExt; // [vxMin, vxMax] -> [0, 1]
 
             indices.Emplace(vertices.Num());
             vertices.Emplace(pos, scalar);
@@ -248,10 +250,12 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
                     uint8 cornerState = 0;
                     FVector4f scalars;
                     for (int32 i = 0; i < 4; ++i) {
-                        scalars[i] =
-                            Params.UseSmoothedVolume
-                                ? Params.VolumeComponent->SampleVolumeCPUDataSmoothed<T>(pos)
-                                : Params.VolumeComponent->SampleVolumeCPUData<T>(pos);
+                        if (Params.UseSmoothedVolume) {
+                            scalars[i] = Params.VolumeComponent->SampleVolumeCPUDataSmoothed(pos);
+                            scalars[i] = scalars[i] * vxExt + vxMin; // [0, 1] -> [vxMin, vxMax]
+                        }
+                        else
+                            scalars[i] = Params.VolumeComponent->SampleVolumeCPUData<T>(pos);
                         if (scalars[i] >= Params.IsoValue)
                             cornerState |= 1 << i;
 

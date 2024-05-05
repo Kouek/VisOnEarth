@@ -11,9 +11,7 @@
 
 #include "Runtime/Renderer/Private/SceneRendering.h"
 
-#define THREAD_PER_GROUP_X 16
-#define THREAD_PER_GROUP_Y 16
-#define THREAD_PER_GROUP_Z 1
+#include "Util.h"
 
 class VIS4EARTH_API FDVRShader : public FGlobalShader {
   public:
@@ -44,9 +42,9 @@ class VIS4EARTH_API FDVRShader : public FGlobalShader {
     static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters &Parameters,
                                              FShaderCompilerEnvironment &OutEnvironment) {
         FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
-        OutEnvironment.SetDefine(TEXT("THREAD_PER_GROUP_X"), THREAD_PER_GROUP_X);
-        OutEnvironment.SetDefine(TEXT("THREAD_PER_GROUP_Y"), THREAD_PER_GROUP_Y);
-        OutEnvironment.SetDefine(TEXT("THREAD_PER_GROUP_Z"), THREAD_PER_GROUP_Z);
+        OutEnvironment.SetDefine(TEXT("THREAD_PER_GROUP_X"), VIS4EARTH_THREAD_PER_GROUP_X);
+        OutEnvironment.SetDefine(TEXT("THREAD_PER_GROUP_Y"), VIS4EARTH_THREAD_PER_GROUP_Y);
+        OutEnvironment.SetDefine(TEXT("THREAD_PER_GROUP_Z"), 1);
     }
 };
 
@@ -135,6 +133,6 @@ void FDVRRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
     FComputeShaderUtils::AddPass(
         grphBldr, RDG_EVENT_NAME("Direct Volume Rendering"),
         ERDGPassFlags::Compute | ERDGPassFlags::NeverCull, shader, shaderParams,
-        FIntVector(FMath::DivideAndRoundUp(rndrSz.X, THREAD_PER_GROUP_X),
-                   FMath::DivideAndRoundUp(rndrSz.Y, THREAD_PER_GROUP_Y), 1));
+        FIntVector(FMath::DivideAndRoundUp(rndrSz.X, VIS4EARTH_THREAD_PER_GROUP_X),
+                   FMath::DivideAndRoundUp(rndrSz.Y, VIS4EARTH_THREAD_PER_GROUP_Y), 1));
 }

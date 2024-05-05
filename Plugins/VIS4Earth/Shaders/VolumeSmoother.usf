@@ -1,0 +1,45 @@
+// Author: Kouek Kou
+
+#include "/Engine/Public/Platform.ush"
+
+int SmoothTy;
+int SmoothDim;
+int3 VolDim;
+Texture3D<float> VolInput;
+RWBuffer<float> VolOutput;
+
+[numthreads(THREAD_PER_GROUP_X, THREAD_PER_GROUP_Y, THREAD_PER_GROUP_Z)]
+void Smooth(int3 dispatchThreadID : SV_DispatchThreadID) {
+    if (dispatchThreadID.x >= VolDim.x || dispatchThreadID.y >= VolDim.y ||
+        dispatchThreadID.z >= VolDim.z)
+        return;
+
+    float result;
+    int3 dPos = int3(dispatchThreadID.x == 0 ? 0 : -1, dispatchThreadID.y == 0 ? 0 : -1,
+        SmoothDim == 0 || dispatchThreadID.z == 0 ? 0 : -1);
+    if (SmoothTy == 0) {
+        // Average
+        result = 0.f;
+        int cnt = 0;
+        for (; dPos.z < (SmoothDim == 0 || dispatchThreadID.z == VolDim.z - 1 ? 1 : 2); ++dPos.z)
+            for (; dPos.y < (dispatchThreadID.y == VolDim.y - 1 ? 1 : 2); ++dPos.y)
+                for (; dPos.x < (dispatchThreadID.x == VolDim.x - 1 ? 1 : 2); ++dPos.x) {
+                    float scalar = VolInput[dispatchThreadID + dPos];
+                    result += scalar;
+                    ++cnt;
+                }
+        result /= cnt;
+    }
+    else {
+        // Max
+        result = 0.f;
+        for (; dPos.z < (SmoothDim == 0 || dispatchThreadID.z == VolDim.z - 1 ? 1 : 2); ++dPos.z)
+            for (; dPos.y < (dispatchThreadID.y == VolDim.y - 1 ? 1 : 2); ++dPos.y)
+                for (; dPos.x < (dispatchThreadID.x == VolDim.x - 1 ? 1 : 2); ++dPos.x) {
+                    float scalar = VolInput[dispatchThreadID + dPos];
+                    result = max(scalar, result);
+                }
+    }
+    uint idxOut = dispatchThreadID.z * VolDim.y * VolDim.x + dispatchThreadID.y * VolDim.x + dispatchThreadID.x;
+    VolOutput[idxOut] = result;
+}

@@ -5,7 +5,7 @@
 #include <array>
 
 TVariant<UVolumeTexture *, FString>
-VolumeData::LoadFromFile(const Desc &Desc,
+VolumeData::LoadFromFile(const LoadFromFileDesc &Desc,
                          TOptional<std::reference_wrapper<TArray<uint8>>> VolumeOut) {
     using RetType = TVariant<UVolumeTexture *, FString>;
 
@@ -98,31 +98,53 @@ VolumeData::LoadFromFile(const Desc &Desc,
     switch (Desc.VoxTy) {
     case ESupportedVoxelType::UInt8:
         return load(reinterpret_cast<uint8 *>(buf.GetData()));
+    case ESupportedVoxelType::UInt16:
+        return load(reinterpret_cast<uint16 *>(buf.GetData()));
+    case ESupportedVoxelType::Float32:
+        return load(reinterpret_cast<float *>(buf.GetData()));
     default:
         return RetType(TInPlaceType<FString>(), TEXT("Invalid Desc.VoxTy."));
     }
 }
 
 TVariant<UVolumeTexture *, FString>
-VolumeData::SmoothFromFlatArray(ESupportedVoxelType VoxTy, const FIntVector3 &Dimension,
-                                const TArray<uint8> &VolDat, const FName &Name,
+VolumeData::SmoothFromFlatArray(const SmoothFromFlatArrayDesc &Desc,
                                 TOptional<std::reference_wrapper<TArray<uint8>>> SmoothedVolOut) {
     using RetType = TVariant<UVolumeTexture *, FString>;
 
-    auto voxPerVolYxX = static_cast<uint64>(Dimension.Y) * Dimension.X;
+    auto voxPerVolYxX = static_cast<uint64>(Desc.Dimension.Y) * Desc.Dimension.X;
 
     TArray<uint8> buf;
-    buf.SetNum(VolDat.Num());
+    buf.SetNum(Desc.VolDat.Num());
 
-    auto smoothKernel = [&]<SupportedVoxelType T>(const T *dat, const FIntVector3 &pos) -> T {
+    auto smoothKernelMax = [&]<SupportedVoxelType T>(const T *dat, const FIntVector3 &pos) -> T {
+        auto scalar = std::numeric_limits<T>::min();
+        FIntVector3 dPos(pos.X == 0 ? 0 : -1, pos.Y == 0 ? 0 : -1,
+                         Desc.SmoothDim == ESmoothDimension::XY || pos.Z == 0 ? 0 : -1);
+        for (; dPos.Z <
+               (Desc.SmoothDim == ESmoothDimension::XY || pos.Z == Desc.Dimension.Z - 1 ? 1 : 2);
+             ++dPos.Z)
+            for (; dPos.Y < (pos.Y == Desc.Dimension.Y - 1 ? 1 : 2); ++dPos.Y)
+                for (; dPos.X < (pos.X == Desc.Dimension.X - 1 ? 1 : 2); ++dPos.X) {
+                    auto newPos = pos + dPos;
+                    scalar = std::max(
+                        scalar,
+                        dat[newPos.Z * voxPerVolYxX + newPos.Y * Desc.Dimension.X + newPos.X]);
+                }
+        return scalar;
+    };
+    auto smoothKernelAvg = [&]<SupportedVoxelType T>(const T *dat, const FIntVector3 &pos) -> T {
         float scalar = 0.f;
         int32 num = 0.f;
-        FIntVector3 dPos(pos.X == 0 ? 0 : -1, pos.Y == 0 ? 0 : -1, pos.Z == 0 ? 0 : -1);
-        for (; dPos.Z < (pos.Z == Dimension.Z - 1 ? 1 : 2); ++dPos.Z)
-            for (; dPos.Y < (pos.Y == Dimension.Y - 1 ? 1 : 2); ++dPos.Y)
-                for (; dPos.X < (pos.X == Dimension.X - 1 ? 1 : 2); ++dPos.X) {
+        FIntVector3 dPos(pos.X == 0 ? 0 : -1, pos.Y == 0 ? 0 : -1,
+                         Desc.SmoothDim != ESmoothDimension::XY || pos.Z == 0 ? 0 : -1);
+        for (; dPos.Z <
+               (Desc.SmoothDim != ESmoothDimension::XY || pos.Z == Desc.Dimension.Z - 1 ? 1 : 2);
+             ++dPos.Z)
+            for (; dPos.Y < (pos.Y == Desc.Dimension.Y - 1 ? 1 : 2); ++dPos.Y)
+                for (; dPos.X < (pos.X == Desc.Dimension.X - 1 ? 1 : 2); ++dPos.X) {
                     auto newPos = pos + dPos;
-                    scalar += dat[newPos.Z * voxPerVolYxX + newPos.Y * Dimension.X + newPos.X];
+                    scalar += dat[newPos.Z * voxPerVolYxX + newPos.Y * Desc.Dimension.X + newPos.X];
                     ++num;
                 }
         if constexpr (std::is_floating_point_v<T>)
@@ -133,22 +155,25 @@ VolumeData::SmoothFromFlatArray(ESupportedVoxelType VoxTy, const FIntVector3 &Di
     auto smooth = [&]<SupportedVoxelType T>(T *newDat, const T *oldDat) -> RetType {
         int32 idx = 0;
         FIntVector3 pos;
-        for (pos.Z = 0; pos.Z < Dimension.Z; ++pos.Z)
-            for (pos.Y = 0; pos.Y < Dimension.Y; ++pos.Y)
-                for (pos.X = 0; pos.X < Dimension.X; ++pos.X) {
-                    newDat[idx] = smoothKernel(oldDat, pos);
+        for (pos.Z = 0; pos.Z < Desc.Dimension.Z; ++pos.Z)
+            for (pos.Y = 0; pos.Y < Desc.Dimension.Y; ++pos.Y)
+                for (pos.X = 0; pos.X < Desc.Dimension.X; ++pos.X) {
+                    newDat[idx] = Desc.SmoothTy == ESmoothType::Avg ? smoothKernelAvg(oldDat, pos)
+                                                                    : smoothKernelMax(oldDat, pos);
                     ++idx;
                 }
 
-        auto volSz = sizeof(T) * Dimension.X * Dimension.Y * Dimension.Z;
-        if (VolDat.Num() != volSz)
+        auto volSz = sizeof(T) * Desc.Dimension.X * Desc.Dimension.Y * Desc.Dimension.Z;
+        if (Desc.VolDat.Num() != volSz)
             return RetType(
                 TInPlaceType<FString>(),
-                FString::Format(TEXT("Size of VolDat {0} is not the same as Dimension {1}."),
-                                {VolDat.Num(), Dimension.ToString()}));
+                FString::Format(
+                    TEXT("Size of Desc.VolDat {0} is not the same as Desc.Dimension {1}."),
+                    {Desc.VolDat.Num(), Desc.Dimension.ToString()}));
 
-        auto tex = UVolumeTexture::CreateTransient(Dimension.X, Dimension.Y, Dimension.Z,
-                                                   GetVoxelPixelFormat(VoxTy), Name);
+        auto tex =
+            UVolumeTexture::CreateTransient(Desc.Dimension.X, Desc.Dimension.Y, Desc.Dimension.Z,
+                                            GetVoxelPixelFormat(Desc.VoxTy), Desc.Name);
         tex->Filter = TextureFilter::TF_Trilinear;
         tex->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
         tex->AddressMode = TextureAddress::TA_Clamp;
@@ -166,10 +191,10 @@ VolumeData::SmoothFromFlatArray(ESupportedVoxelType VoxTy, const FIntVector3 &Di
         return RetType(TInPlaceType<UVolumeTexture *>(), tex);
     };
 
-    switch (VoxTy) {
+    switch (Desc.VoxTy) {
     case ESupportedVoxelType::UInt8:
         return smooth(reinterpret_cast<uint8 *>(buf.GetData()),
-                      reinterpret_cast<const uint8 *>(VolDat.GetData()));
+                      reinterpret_cast<const uint8 *>(Desc.VolDat.GetData()));
     default:
         return RetType(TInPlaceType<FString>(), TEXT("Invalid Desc.VoxTy."));
     }
@@ -185,7 +210,7 @@ TransferFunctionData::LoadFromFile(const Desc &Desc) {
         return RetType(TInPlaceType<FString>(), FString::Format(TEXT("Invalid Desc.FilePath {0}."),
                                                                 {Desc.FilePath.FilePath}));
 
-    std::map<float, FVector4f> pnts;
+    TMap<float, FVector4f> pnts;
     for (int i = 0; i < buf.Num(); ++i) {
         if (buf[i].IsEmpty())
             continue;
@@ -204,7 +229,7 @@ TransferFunctionData::LoadFromFile(const Desc &Desc) {
                 FString::Format(TEXT("Invalid contents at line {0} in Desc.FilePath {1}."),
                                 {i + 1, Desc.FilePath.FilePath}));
 
-        auto &v4 = pnts[lnVars[0]];
+        auto &v4 = pnts.Emplace(lnVars[0]);
         for (int j = 0; j < 4; ++j)
             v4[j] = std::min(std::max(lnVars[j + 1] / 255.f, 0.f), 1.f);
     }
@@ -220,18 +245,16 @@ TOptional<FString> TransferFunctionData::SaveToFile(const UCurveLinearColor *Cur
     if (!Curve)
         return FString("Invalid Curve.");
 
-    std::map<float, FVector4f> pnts;
+    TMap<float, FVector4f> pnts;
     {
         std::array<const FRichCurve *, 4> curves = {&Curve->FloatCurves[0], &Curve->FloatCurves[1],
                                                     &Curve->FloatCurves[2], &Curve->FloatCurves[3]};
         for (int32 i = 0; i < 4; ++i)
             for (auto itr = curves[i]->GetKeyIterator(); itr; ++itr) {
-                auto pnt = pnts.find(itr->Time);
-                if (pnt == pnts.end()) {
-                    auto [_pnt, _] = pnts.emplace(itr->Time, Curve->GetLinearColorValue(itr->Time));
-                    pnt = _pnt;
-                }
-                pnt->second[i] = std::clamp(itr->Value * 255.f, 0.f, 255.f);
+                auto pnt = pnts.Find(itr->Time);
+                if (!pnt)
+                    pnt = &pnts.Emplace(itr->Time, Curve->GetLinearColorValue(itr->Time));
+                (*pnt)[i] = std::clamp(itr->Value * 255.f, 0.f, 255.f);
             }
     }
 
@@ -267,7 +290,7 @@ UTexture2D *TransferFunctionData::FromFlatArrayToTexture(const TArray<FFloat16> 
 }
 
 void TransferFunctionData::FromPointsToCurve(UCurveLinearColor *Curve,
-                                             const std::map<float, FVector4f> &Pnts) {
+                                             const TMap<float, FVector4f> &Pnts) {
     Curve->ResetCurve();
     std::array<FRichCurve *, 4> curves = {&Curve->FloatCurves[0], &Curve->FloatCurves[1],
                                           &Curve->FloatCurves[2], &Curve->FloatCurves[3]};
@@ -276,7 +299,7 @@ void TransferFunctionData::FromPointsToCurve(UCurveLinearColor *Curve,
             curves[i]->AddKey(scalar, rgba[i]);
 }
 
-UCurveLinearColor *TransferFunctionData::FromPointsToCurve(const std::map<float, FVector4f> &Pnts) {
+UCurveLinearColor *TransferFunctionData::FromPointsToCurve(const TMap<float, FVector4f> &Pnts) {
     auto curve = NewObject<UCurveLinearColor>();
     FromPointsToCurve(curve, Pnts);
 
@@ -284,7 +307,7 @@ UCurveLinearColor *TransferFunctionData::FromPointsToCurve(const std::map<float,
 }
 
 TArray<FFloat16>
-TransferFunctionData::LerpFromPointsToFlatArray(const std::map<float, FVector4f> &Pnts) {
+TransferFunctionData::LerpFromPointsToFlatArray(const TMap<float, FVector4f> &Pnts) {
     TArray<FFloat16> dat;
 
     dat.Reserve(Resolution * 4);
@@ -293,7 +316,7 @@ TransferFunctionData::LerpFromPointsToFlatArray(const std::map<float, FVector4f>
     auto prevPnt = pnt;
     ++pnt;
     for (int scalar = 0; scalar < Resolution; ++scalar) {
-        if (scalar > pnt->first) {
+        if (scalar > pnt->Key) {
             ++prevPnt;
             ++pnt;
         }

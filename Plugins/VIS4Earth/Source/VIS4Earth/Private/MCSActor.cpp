@@ -27,13 +27,13 @@ void AMCSActor::setupSignalsSlots() {
 }
 
 void AMCSActor::checkAndCorrectParameters() {
-    switch (VolumeComponent->GetVolumeVoxelType()) {
-    case ESupportedVoxelType::UInt8:
-        if (IsoValue < 0.f)
-            IsoValue = 0.f;
-        if (IsoValue > 255.f)
-            IsoValue = 255.f;
-        break;
+    {
+        auto [vxMin, vxMax, vxExt] =
+            VolumeData::GetVoxelMinMaxExtent(VolumeComponent->GetVolumeVoxelType());
+        if (IsoValue < vxMin)
+            IsoValue = vxMin;
+        if (IsoValue > vxMax)
+            IsoValue = vxMax;
     }
 
     if (!VolumeComponent->VolumeTexture)

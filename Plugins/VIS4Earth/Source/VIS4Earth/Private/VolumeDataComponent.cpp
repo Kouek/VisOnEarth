@@ -7,6 +7,8 @@
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
+#include "VolumeSmoother.h"
+
 void UVolumeDataComponent::LoadRAWVolume() {
     FJsonSerializableArray files;
     FDesktopPlatformModule::Get()->OpenFileDialog(
@@ -80,21 +82,20 @@ void UVolumeDataComponent::SyncTFCurveTexture() {
     if (!TransferFunctionTexture || !TransferFunctionCurve)
         return;
 
-    tfPnts.clear();
+    tfPnts.Empty();
     {
         std::array<const FRichCurve *, 4> curves = {
             &TransferFunctionCurve->FloatCurves[0], &TransferFunctionCurve->FloatCurves[1],
             &TransferFunctionCurve->FloatCurves[2], &TransferFunctionCurve->FloatCurves[3]};
         for (int32 i = 0; i < 4; ++i)
             for (auto itr = curves[i]->GetKeyIterator(); itr; ++itr) {
-                auto pnt = tfPnts.find(itr->Time);
-                if (pnt == tfPnts.end()) {
+                auto pnt = tfPnts.Find(itr->Time);
+                if (!pnt) {
                     auto legalTime = std::clamp(itr->Time, TFMinTime, TFMaxTime);
-                    auto [_pnt, _] = tfPnts.emplace(
-                        legalTime, TransferFunctionCurve->GetLinearColorValue(legalTime));
-                    pnt = _pnt;
+                    pnt = &tfPnts.Emplace(legalTime,
+                                          TransferFunctionCurve->GetLinearColorValue(legalTime));
                 }
-                pnt->second[i] = std::clamp(itr->Value, TFMinVal, TFMaxVal);
+                (*pnt)[i] = std::clamp(itr->Value, TFMinVal, TFMaxVal);
             }
     }
 
@@ -106,19 +107,33 @@ void UVolumeDataComponent::SyncTFCurveTexture() {
 }
 
 void UVolumeDataComponent::generateSmoothedVolume() {
-    if (!keepSmoothedVolume || !keepVolumeInCPU)
+    if (!VolumeTexture || !keepSmoothedVolume)
         return;
 
-    auto smoothedVolume = VolumeData::SmoothFromFlatArray(
-        prevVolumeDataDesc.VoxTy, prevVolumeDataDesc.Dimension, volumeCPUData, NAME_None,
-        std::reference_wrapper(volumeCPUDataSmoothed));
-    if (smoothedVolume.IsType<FString>()) {
-        auto &errMsg = smoothedVolume.Get<FString>();
-        processError(errMsg);
-        return;
-    }
+    FVolumeSmoother::Exec(
+        {.SmoothType = SmoothType,
+         .SmoothDimension = SmoothDimension,
+         .VolumeTexture = VolumeTexture,
+         .FinishedCallback = [this](TSharedPtr<TArray<float>> VolDat) {
+             VolumeTextureSmoothed = UVolumeTexture::CreateTransient(
+                 VolumeTexture->GetSizeX(), VolumeTexture->GetSizeY(), VolumeTexture->GetSizeZ(),
+                 EPixelFormat::PF_R32_FLOAT);
+             VolumeTextureSmoothed->Filter = TextureFilter::TF_Trilinear;
+             VolumeTextureSmoothed->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
+             VolumeTextureSmoothed->AddressMode = TextureAddress::TA_Clamp;
 
-    VolumeTextureSmoothed = smoothedVolume.Get<UVolumeTexture *>();
+             auto texDat = VolumeTextureSmoothed->GetPlatformData()->Mips[0].BulkData.Lock(
+                 EBulkDataLockFlags::LOCK_READ_WRITE);
+             FMemory::Memcpy(texDat, VolDat->GetData(), sizeof(float) * VolDat->Num());
+             VolumeTextureSmoothed->GetPlatformData()->Mips[0].BulkData.Unlock();
+
+             VolumeTextureSmoothed->UpdateResource();
+
+             if (keepVolumeInCPU)
+                 volumeCPUDataSmoothed = std::move(*VolDat);
+
+             OnVolumeDataChanged.Broadcast(this);
+         }});
 }
 
 void UVolumeDataComponent::createDefaultTFTexture() {
