@@ -62,7 +62,7 @@ void UVolumeDataComponent::LoadTF() {
     TransferFunctionTexture = tex;
     TransferFunctionCurve = curve;
 
-    OnVolumeDataChanged.Broadcast(this);
+    OnTransferFunctionDataChanged.Broadcast(this);
 }
 
 void UVolumeDataComponent::SaveTF() {
@@ -91,11 +91,13 @@ void UVolumeDataComponent::SyncTFCurveTexture() {
             for (auto itr = curves[i]->GetKeyIterator(); itr; ++itr) {
                 auto pnt = tfPnts.Find(itr->Time);
                 if (!pnt) {
-                    auto legalTime = std::clamp(itr->Time, TFMinTime, TFMaxTime);
+                    auto legalTime = std::clamp(
+                        itr->Time, 0.f, static_cast<float>(TransferFunctionData::Resolution - 1));
                     pnt = &tfPnts.Emplace(legalTime,
                                           TransferFunctionCurve->GetLinearColorValue(legalTime));
                 }
-                (*pnt)[i] = std::clamp(itr->Value, TFMinVal, TFMaxVal);
+                (*pnt)[i] = std::clamp(itr->Value, 0.f,
+                                       static_cast<float>(TransferFunctionData::Resolution - 1));
             }
     }
 
@@ -103,12 +105,16 @@ void UVolumeDataComponent::SyncTFCurveTexture() {
         TransferFunctionTexture.Get(), TransferFunctionData::LerpFromPointsToFlatArray(tfPnts));
     TransferFunctionData::FromPointsToCurve(TransferFunctionCurve.Get(), tfPnts);
 
-    OnVolumeDataChanged.Broadcast(this);
+    OnTransferFunctionDataChanged.Broadcast(this);
 }
 
 void UVolumeDataComponent::generateSmoothedVolume() {
-    if (!VolumeTexture || !keepSmoothedVolume)
+    if (!VolumeTexture)
         return;
+    if (!keepSmoothedVolume) {
+        VolumeTextureSmoothed = nullptr;
+        return;
+    }
 
     FVolumeSmoother::Exec(
         {.SmoothType = SmoothType,
@@ -142,9 +148,9 @@ void UVolumeDataComponent::createDefaultTFTexture() {
 
     TArray<FFloat16> dat;
     {
-        dat.Reserve(TFResolution * 4);
-        for (int scalar = 0; scalar < TFResolution; ++scalar) {
-            auto a = 1.f * scalar / (TFResolution - 1);
+        dat.Reserve(TransferFunctionData::Resolution * 4);
+        for (int scalar = 0; scalar < TransferFunctionData::Resolution; ++scalar) {
+            auto a = 1.f * scalar / (TransferFunctionData::Resolution - 1);
             dat.Emplace(a);
             dat.Emplace(1.f - std::abs(2.f * a - 1.f));
             dat.Emplace(1.f - a);

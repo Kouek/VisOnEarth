@@ -102,7 +102,7 @@ void FMCSRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
 
         auto extrnlTexRDG = RegisterExternalTexture(
             grphBldr, rndrParams.TransferFunctionTexture->GetResource()->GetTexture2DRHI(),
-            TEXT("TF Texture"));
+            TEXT("TF Texture") TEXT(" in ") TEXT(__FUNCTION__));
         shaderParams->TFInput = grphBldr.CreateSRV(FRDGTextureSRVDesc(extrnlTexRDG));
 
         shaderParams->RenderTargets[0] =
@@ -253,8 +253,7 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
                         if (Params.UseSmoothedVolume) {
                             scalars[i] = Params.VolumeComponent->SampleVolumeCPUDataSmoothed(pos);
                             scalars[i] = scalars[i] * vxExt + vxMin; // [0, 1] -> [vxMin, vxMax]
-                        }
-                        else
+                        } else
                             scalars[i] = Params.VolumeComponent->SampleVolumeCPUData<T>(pos);
                         if (scalars[i] >= Params.IsoValue)
                             cornerState |= 1 << i;
@@ -316,7 +315,8 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
     vertNum = vertices.Num();
     auto bufSz = sizeof(VertexAttr) * vertNum;
     if (!vertexBuffer.IsValid() || vertexBuffer->GetSize() != bufSz) {
-        FRHIResourceCreateInfo info(TEXT("Marching Square Create Vertex Buffer"));
+        FRHIResourceCreateInfo info(TEXT("Marching Square Create Vertex Buffer") TEXT(" in ")
+                                        TEXT(__FUNCTION__));
         vertexBuffer = RHICmdList.CreateVertexBuffer(bufSz, BUF_VertexBuffer | BUF_Static,
                                                      ERHIAccess::VertexOrIndexBuffer, info);
     }
@@ -327,7 +327,8 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
     primNum = indices.Num() / 2;
     bufSz = sizeof(uint32) * indices.Num();
     if (!indexBuffer.IsValid() || indexBuffer->GetSize() != bufSz) {
-        FRHIResourceCreateInfo info(TEXT("Marching Square Create Index Buffer"));
+        FRHIResourceCreateInfo info(TEXT("Marching Square Create Index Buffer") TEXT(" in ")
+                                        TEXT(__FUNCTION__));
         indexBuffer = RHICmdList.CreateVertexBuffer(bufSz, BUF_VertexBuffer | BUF_Static,
                                                     ERHIAccess::VertexOrIndexBuffer, info);
     }

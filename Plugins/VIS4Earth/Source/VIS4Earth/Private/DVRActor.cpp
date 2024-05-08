@@ -5,27 +5,25 @@
 
 #include "Runtime/Renderer/Private/SceneRendering.h"
 
+#include "TFPreIntegrator.h"
+
 ADVRActor::ADVRActor() {
     GeoComponent = CreateDefaultSubobject<UGeoComponent>(TEXT("Geographics"));
     VolumeComponent = CreateDefaultSubobject<UVolumeDataComponent>(TEXT("VolumeData"));
 
+    generatePreIntegratedTF();
     setupRenderer();
     setupSignalsSlots();
 }
 
 void ADVRActor::setupSignalsSlots() {
-    GeoComponent->OnGeographicsChanged.AddLambda(
-        [actor = TWeakObjectPtr<ADVRActor>(this)](UGeoComponent *) {
-            if (!actor.IsValid())
-                return;
-            actor->setupRenderer();
-        });
+    GeoComponent->OnGeographicsChanged.AddLambda([this](UGeoComponent *) { setupRenderer(); });
     VolumeComponent->OnVolumeDataChanged.AddLambda(
-        [actor = TWeakObjectPtr<ADVRActor>(this)](UVolumeDataComponent *) {
-            if (!actor.IsValid())
-                return;
-            actor->setupRenderer();
-        });
+        [this](UVolumeDataComponent *) { setupRenderer(); });
+    VolumeComponent->OnTransferFunctionDataChanged.AddLambda([this](UVolumeDataComponent *) {
+        generatePreIntegratedTF();
+        setupRenderer();
+    });
 }
 
 void ADVRActor::setupRenderer() {
@@ -39,11 +37,13 @@ void ADVRActor::setupRenderer() {
                                          .HeightRange = GeoComponent->HeightRange,
                                          .GeoRef = GeoComponent->GeoRef.Get()});
     renderer->SetRenderParameters(
-        {.MaxStepCount = MaxStepCount,
+        {.UsePreIntegratedTF = UsePreIntegratedTF,
+         .MaxStepCount = MaxStepCount,
          .Step = Step,
          .RelativeLightness = RelativeLightness,
          .VolumeTexture = VolumeComponent->VolumeTexture.Get(),
-         .TransferFunctionTexture = VolumeComponent->TransferFunctionTexture
+         .TransferFunctionTexture = UsePreIntegratedTF ? PreIntegratedTF.Get()
+                                    : VolumeComponent->TransferFunctionTexture
                                         ? VolumeComponent->TransferFunctionTexture.Get()
                                         : VolumeComponent->DefaultTransferFunctionTexture.Get()});
 }
@@ -54,4 +54,36 @@ void ADVRActor::destroyRenderer() {
 
     renderer->Unregister();
     renderer.Reset();
+}
+
+void ADVRActor::generatePreIntegratedTF() {
+    if (!VolumeComponent->TransferFunctionTexture &&
+        !VolumeComponent->DefaultTransferFunctionTexture)
+        return;
+    if (!UsePreIntegratedTF) {
+        PreIntegratedTF = nullptr;
+        setupRenderer();
+        return;
+    }
+
+    auto tfDat = FTFPreIntegrator::Exec(
+        {.TransferFunctionTexture = VolumeComponent->TransferFunctionTexture
+                                        ? VolumeComponent->TransferFunctionTexture
+                                        : VolumeComponent->DefaultTransferFunctionTexture});
+
+    PreIntegratedTF = UTexture2D::CreateTransient(TransferFunctionData::Resolution,
+                                                  TransferFunctionData::Resolution, PF_FloatRGBA);
+    PreIntegratedTF->Filter = TextureFilter::TF_Bilinear;
+    PreIntegratedTF->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
+    PreIntegratedTF->AddressX = PreIntegratedTF->AddressY = TextureAddress::TA_Clamp;
+
+    auto texDat = PreIntegratedTF->GetPlatformData()->Mips[0].BulkData.Lock(
+        EBulkDataLockFlags::LOCK_READ_WRITE);
+    FMemory::Memmove(texDat, tfDat.GetData(),
+                     TransferFunctionData::ElemSz * TransferFunctionData::Resolution *
+                         TransferFunctionData::Resolution);
+    PreIntegratedTF->GetPlatformData()->Mips[0].BulkData.Unlock();
+    PreIntegratedTF->UpdateResource();
+
+    setupRenderer();
 }

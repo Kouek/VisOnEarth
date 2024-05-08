@@ -12,18 +12,9 @@ AMCSActor::AMCSActor() {
 }
 
 void AMCSActor::setupSignalsSlots() {
-    GeoComponent->OnGeographicsChanged.AddLambda(
-        [actor = TWeakObjectPtr<AMCSActor>(this)](UGeoComponent *) {
-            if (!actor.IsValid())
-                return;
-            actor->setupRenderer();
-        });
+    GeoComponent->OnGeographicsChanged.AddLambda([this](UGeoComponent *) { setupRenderer(); });
     VolumeComponent->OnVolumeDataChanged.AddLambda(
-        [actor = TWeakObjectPtr<AMCSActor>(this)](UVolumeDataComponent *) {
-            if (!actor.IsValid())
-                return;
-            actor->setupRenderer(true);
-        });
+        [this](UVolumeDataComponent *) { setupRenderer(true); });
 }
 
 void AMCSActor::checkAndCorrectParameters() {

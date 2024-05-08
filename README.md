@@ -11,7 +11,7 @@ The core library is encapsulated in [`Plugins/VIS4Earth`](./Plugins/VIS4Earth/RE
 ### Direct Volume Rendering
 
 - [x] Direct Volume Rendering
-- [ ] Direct Volume Rendering with Pre-Integrated Method
+- [x] Direct Volume Rendering with Pre-Integrated Method
 - [ ] Direct Volume Rendering with Advanced Illumination
 
 ### Heat Map

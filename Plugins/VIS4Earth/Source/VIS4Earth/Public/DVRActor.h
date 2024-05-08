@@ -22,6 +22,8 @@ class VIS4EARTH_API ADVRActor : public AActor {
 
   public:
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
+    bool UsePreIntegratedTF = FDVRRenderer::RenderParameters::DefUsePreIntegratedTF;
+    UPROPERTY(EditAnywhere, Category = "VIS4Earth")
     int MaxStepCount = FDVRRenderer::RenderParameters::DefMaxStepCount;
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
     float Step = FDVRRenderer::RenderParameters::DefStep;
@@ -31,9 +33,11 @@ class VIS4EARTH_API ADVRActor : public AActor {
     TObjectPtr<UGeoComponent> GeoComponent;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UVolumeDataComponent> VolumeComponent;
+    UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
+    TObjectPtr<UTexture2D> PreIntegratedTF;
 
     ADVRActor();
-    ~ADVRActor() { destroyRenderer();}
+    ~ADVRActor() { destroyRenderer(); }
 
     void Destroyed() override {
         Super::Destroyed();
@@ -46,6 +50,7 @@ class VIS4EARTH_API ADVRActor : public AActor {
     void setupSignalsSlots();
     void setupRenderer();
     void destroyRenderer();
+    void generatePreIntegratedTF();
 
 #ifdef WITH_EDITOR
   public:
@@ -60,6 +65,12 @@ class VIS4EARTH_API ADVRActor : public AActor {
             name == GET_MEMBER_NAME_CHECKED(ADVRActor, Step) ||
             name == GET_MEMBER_NAME_CHECKED(ADVRActor, RelativeLightness)) {
             setupRenderer();
+            return;
+        }
+
+        if (name == GET_MEMBER_NAME_CHECKED(ADVRActor, UsePreIntegratedTF) ||
+            name == GET_MEMBER_NAME_CHECKED(ADVRActor, Step) && PreIntegratedTF) {
+            generatePreIntegratedTF();
             return;
         }
     }

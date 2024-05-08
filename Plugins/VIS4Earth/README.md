@@ -12,7 +12,7 @@ z &= kH \sin{L}\\
 x &= H \cos{L} \cos{B}\\
 y &= H \cos{L} \sin{B}\\
 \\
-H &= \sqrt{x^2 + y^2 + \frac{1}{k^2}z^2}\\11
+H &= \sqrt{x^2 + y^2 + \frac{1}{k^2}z^2}\\
 h(L) &= \sqrt{x^2 + y^2 + z^2} = H\sqrt{\cos^2{L} + k^2\sin^2{L}}\\
 &= H\sqrt{1+(k^2-1)\sin^2{L}}\\
 L &= \arcsin{\frac{z}{kH}}\\

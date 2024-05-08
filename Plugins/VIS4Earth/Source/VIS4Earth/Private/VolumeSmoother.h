@@ -70,7 +70,7 @@ class VIS4EARTH_API FVolumeSmoother {
                               Params.VolumeTexture->GetSizeZ());
         auto smoothedVolBuf = grphBldr.CreateBuffer(
             FRDGBufferDesc::CreateBufferDesc(sizeof(float), volDim.X * volDim.Y * volDim.Z),
-            TEXT("Volume Buffer"));
+            TEXT("Smoothed Volume Buffer") TEXT(" in ") TEXT(__FUNCTION__));
         {
             shaderParams->SmoothTy = static_cast<int>(Params.SmoothType);
             shaderParams->SmoothDim = static_cast<int>(Params.SmoothDimension);
@@ -81,7 +81,7 @@ class VIS4EARTH_API FVolumeSmoother {
 
             auto extrnlTexRDG = RegisterExternalTexture(
                 grphBldr, Params.VolumeTexture->GetResource()->GetTexture3DRHI(),
-                TEXT("Volume Texture"));
+                TEXT("Volume Texture") TEXT(" in ") TEXT(__FUNCTION__));
             shaderParams->VolInput = grphBldr.CreateSRV(FRDGTextureSRVDesc(extrnlTexRDG));
 
             shaderParams->VolOutput =
@@ -97,7 +97,8 @@ class VIS4EARTH_API FVolumeSmoother {
                 FMath::DivideAndRoundUp(shaderParams->VolDim.Y, VIS4EARTH_THREAD_PER_GROUP_Y),
                 FMath::DivideAndRoundUp(shaderParams->VolDim.Z, VIS4EARTH_THREAD_PER_GROUP_Z)));
 
-        auto bufReadback = new FRHIGPUBufferReadback(TEXT("Readback Smoothed Volume"));
+        auto bufReadback = new FRHIGPUBufferReadback(TEXT("Readback Smoothed Volume") TEXT(" in ")
+                                                         TEXT(__FUNCTION__));
         AddEnqueueCopyPass(grphBldr, bufReadback, smoothedVolBuf, smoothedVolBuf->GetSize());
 
         auto waitTask = [bufReadback, volDim,

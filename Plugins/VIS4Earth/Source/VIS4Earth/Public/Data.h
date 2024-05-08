@@ -109,6 +109,9 @@ class TransferFunctionData {
         FName Name;
     };
 
+    static constexpr auto Resolution = 256;
+    static constexpr auto ElemSz = sizeof(FFloat16) * 4;
+
     static TVariant<TTuple<UTexture2D *, UCurveLinearColor *>, FString>
     LoadFromFile(const Desc &Desc);
     static TOptional<FString> SaveToFile(const UCurveLinearColor *Curve, const FFilePath &FilePath);
@@ -119,8 +122,4 @@ class TransferFunctionData {
     static UCurveLinearColor *FromPointsToCurve(const TMap<float, FVector4f> &Pnts);
     static void FromPointsToCurve(UCurveLinearColor *Curve, const TMap<float, FVector4f> &Pnts);
     static TArray<FFloat16> LerpFromPointsToFlatArray(const TMap<float, FVector4f> &Pnts);
-
-  private:
-    static constexpr auto Resolution = 256;
-    static constexpr auto ElemSz = sizeof(FFloat16) * 4;
 };

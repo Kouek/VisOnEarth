@@ -50,6 +50,43 @@ class VIS4EARTH_API FDVRShader : public FGlobalShader {
 
 IMPLEMENT_GLOBAL_SHADER(FDVRShader, "/VIS4Earth/DVR.usf", "DVR", SF_Compute);
 
+class VIS4EARTH_API FPreIntDVRShader : public FGlobalShader {
+  public:
+    DECLARE_GLOBAL_SHADER(FPreIntDVRShader);
+    SHADER_USE_PARAMETER_STRUCT(FPreIntDVRShader, FGlobalShader);
+
+    BEGIN_SHADER_PARAMETER_STRUCT(FParameters, VIS4EARTH_API)
+    SHADER_PARAMETER(int, MaxStepCnt)
+    SHADER_PARAMETER(float, Step)
+    SHADER_PARAMETER(float, RelativeLightness)
+    SHADER_PARAMETER(FVector2f, RenderSize)
+    SHADER_PARAMETER(FVector2f, LonRng)
+    SHADER_PARAMETER(FVector2f, LatRng)
+    SHADER_PARAMETER(FVector2f, HeightRng)
+    SHADER_PARAMETER(FMatrix44f, EyeToEarth)
+    SHADER_PARAMETER(FMatrix44f, InvProj)
+    SHADER_PARAMETER_SAMPLER(SamplerState, VolSamplerState)
+    SHADER_PARAMETER_SAMPLER(SamplerState, TFSamplerState)
+    SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture3D, VolInput)
+    SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, TFInput)
+    SHADER_PARAMETER_RDG_TEXTURE_SRV(Texture2D, DepthInput)
+    SHADER_PARAMETER_RDG_TEXTURE_UAV(RWTexture2D, ColorOutput)
+    END_SHADER_PARAMETER_STRUCT()
+
+    static bool ShouldCompilePermutation(const FGlobalShaderPermutationParameters &Parameters) {
+        return true;
+    }
+    static void ModifyCompilationEnvironment(const FGlobalShaderPermutationParameters &Parameters,
+                                             FShaderCompilerEnvironment &OutEnvironment) {
+        FGlobalShader::ModifyCompilationEnvironment(Parameters, OutEnvironment);
+        OutEnvironment.SetDefine(TEXT("THREAD_PER_GROUP_X"), VIS4EARTH_THREAD_PER_GROUP_X);
+        OutEnvironment.SetDefine(TEXT("THREAD_PER_GROUP_Y"), VIS4EARTH_THREAD_PER_GROUP_Y);
+        OutEnvironment.SetDefine(TEXT("THREAD_PER_GROUP_Z"), 1);
+    }
+};
+
+IMPLEMENT_GLOBAL_SHADER(FPreIntDVRShader, "/VIS4Earth/DVR.usf", "PreIntDVR", SF_Compute);
+
 void FDVRRenderer::Register() {
     Unregister();
 
@@ -75,13 +112,27 @@ void FDVRRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
     if (!rndrParams.VolumeTexture.IsValid() || !rndrParams.TransferFunctionTexture.IsValid() ||
         !geoParams.GeoRef.IsValid())
         return;
+    if (!rndrParams.VolumeTexture->GetResource() ||
+        !rndrParams.TransferFunctionTexture->GetResource())
+        return;
+
+    if (rndrParams.UsePreIntegratedTF)
+        render<FPreIntDVRShader>(PostQpqRndrParams);
+    else
+        render<FDVRShader>(PostQpqRndrParams);
+}
+
+template <typename ShaderTy>
+void FDVRRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
+    using ShaderParamsType = ShaderTy::FParameters;
+
     auto &grphBldr = *PostQpqRndrParams.GraphBuilder;
 
     auto rndrSz = FIntVector2(PostQpqRndrParams.ViewportRect.Width(),
                               PostQpqRndrParams.ViewportRect.Height());
 
-    TShaderMapRef<FDVRShader> shader(GetGlobalShaderMap(GMaxRHIFeatureLevel));
-    auto shaderParams = grphBldr.AllocParameters<FDVRShader::FParameters>();
+    TShaderMapRef<ShaderTy> shader(GetGlobalShaderMap(GMaxRHIFeatureLevel));
+    auto shaderParams = grphBldr.AllocParameters<ShaderParamsType>();
     {
         shaderParams->MaxStepCnt = rndrParams.MaxStepCount;
         shaderParams->Step = rndrParams.Step;
@@ -117,11 +168,11 @@ void FDVRRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
 
         auto extrnlTexRDG = RegisterExternalTexture(
             grphBldr, rndrParams.VolumeTexture->GetResource()->GetTexture3DRHI(),
-            TEXT("Volume Texture"));
+            TEXT("Volume Texture") TEXT(" in ") TEXT(__FUNCTION__));
         shaderParams->VolInput = grphBldr.CreateSRV(FRDGTextureSRVDesc(extrnlTexRDG));
         extrnlTexRDG = RegisterExternalTexture(
             grphBldr, rndrParams.TransferFunctionTexture->GetResource()->GetTexture2DRHI(),
-            TEXT("TF Texture"));
+            TEXT("TF Texture") TEXT(" in ") TEXT(__FUNCTION__));
         shaderParams->TFInput = grphBldr.CreateSRV(FRDGTextureSRVDesc(extrnlTexRDG));
 
         shaderParams->DepthInput =
@@ -136,3 +187,6 @@ void FDVRRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
         FIntVector(FMath::DivideAndRoundUp(rndrSz.X, VIS4EARTH_THREAD_PER_GROUP_X),
                    FMath::DivideAndRoundUp(rndrSz.Y, VIS4EARTH_THREAD_PER_GROUP_Y), 1));
 }
+
+template void FDVRRenderer::render<FDVRShader>(FPostOpaqueRenderParameters &);
+template void FDVRRenderer::render<FPreIntDVRShader>(FPostOpaqueRenderParameters &);

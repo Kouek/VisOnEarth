@@ -11,8 +11,6 @@
 
 #include "VolumeDataComponent.generated.h"
 
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnVolumeDataChanged, UVolumeDataComponent *);
-
 UCLASS()
 class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     GENERATED_BODY()
@@ -48,7 +46,11 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     UFUNCTION(CallInEditor, Category = "VIS4Earth")
     void SyncTFCurveTexture();
 
+    DECLARE_MULTICAST_DELEGATE_OneParam(FOnVolumeDataChanged, UVolumeDataComponent *);
+    DECLARE_MULTICAST_DELEGATE_OneParam(FOnTransferFunctionDataChanged, UVolumeDataComponent *);
+
     FOnVolumeDataChanged OnVolumeDataChanged;
+    FOnTransferFunctionDataChanged OnTransferFunctionDataChanged;
 
     UVolumeDataComponent() { createDefaultTFTexture(); }
 
@@ -80,13 +82,6 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     }
 
   private:
-    static constexpr auto TFResolution = 256;
-    static constexpr auto TFElemSz = sizeof(FFloat16) * 4;
-    static constexpr auto TFMinTime = 0.f;
-    static constexpr auto TFMaxTime = 255.f;
-    static constexpr auto TFMinVal = 0.f;
-    static constexpr auto TFMaxVal = 1.f;
-
     size_t voxPerVolYxX;
     bool keepVolumeInCPU = false;
     bool keepSmoothedVolume = false;
@@ -97,6 +92,7 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     TMap<float, FVector4f> tfPnts;
 
     void generateSmoothedVolume();
+    void generatePreIntegratedTF();
     void createDefaultTFTexture();
 
     static void processError(const FString &ErrMsg);
