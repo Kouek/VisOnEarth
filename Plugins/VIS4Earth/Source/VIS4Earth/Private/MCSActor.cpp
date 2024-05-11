@@ -2,6 +2,7 @@
 
 AMCSActor::AMCSActor() {
     GeoComponent = CreateDefaultSubobject<UGeoComponent>(TEXT("Geographics"));
+    RootComponent = GeoComponent;
 
     VolumeComponent = CreateDefaultSubobject<UVolumeDataComponent>(TEXT("VolumeData"));
     VolumeComponent->SetKeepVolumeInCPU(true);
@@ -13,6 +14,8 @@ AMCSActor::AMCSActor() {
 
 void AMCSActor::setupSignalsSlots() {
     GeoComponent->OnGeographicsChanged.AddLambda([this](UGeoComponent *) { setupRenderer(); });
+    VolumeComponent->OnTransferFunctionDataChanged.AddLambda(
+        [this](UVolumeDataComponent *) { setupRenderer(true); });
     VolumeComponent->OnVolumeDataChanged.AddLambda(
         [this](UVolumeDataComponent *) { setupRenderer(true); });
 }

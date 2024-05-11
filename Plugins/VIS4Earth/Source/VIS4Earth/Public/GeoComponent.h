@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include "Components/ActorComponent.h"
+#include "Components/SceneComponent.h"
 #include "CoreMinimal.h"
 #include "Engine/StaticMesh.h"
 
@@ -15,7 +15,7 @@
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGeographicsChanged, UGeoComponent *);
 
 UCLASS()
-class VIS4EARTH_API UGeoComponent : public UActorComponent {
+class VIS4EARTH_API UGeoComponent : public USceneComponent {
     GENERATED_BODY()
 
   public:
@@ -36,6 +36,7 @@ class VIS4EARTH_API UGeoComponent : public UActorComponent {
 
   private:
     void checkAndCorrectParameters();
+    void onGeographicsChanged();
     
     static void processError(const FString &ErrMsg);
 
@@ -52,8 +53,7 @@ class VIS4EARTH_API UGeoComponent : public UActorComponent {
             name == GET_MEMBER_NAME_CHECKED(UGeoComponent, LatitudeRange) ||
             name == GET_MEMBER_NAME_CHECKED(UGeoComponent, LongtitudeRange) ||
             name == GET_MEMBER_NAME_CHECKED(UGeoComponent, HeightRange)) {
-            checkAndCorrectParameters();
-            OnGeographicsChanged.Broadcast(this);
+            onGeographicsChanged();
             return;
         }
     }

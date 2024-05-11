@@ -12,7 +12,8 @@
 void UVolumeDataComponent::LoadRAWVolume() {
     FJsonSerializableArray files;
     FDesktopPlatformModule::Get()->OpenFileDialog(
-        nullptr, TEXT("Select a RAW Volume file"), FPaths::GetProjectFilePath(), TEXT(""),
+        FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
+        TEXT("Select a RAW Volume file"), FPaths::GetProjectFilePath(), TEXT(""),
         TEXT("Volume|*.raw;*.bin;*.RAW"), EFileDialogFlags::None, files);
     if (files.IsEmpty())
         return;
@@ -44,9 +45,10 @@ void UVolumeDataComponent::LoadRAWVolume() {
 
 void UVolumeDataComponent::LoadTF() {
     FJsonSerializableArray files;
-    FDesktopPlatformModule::Get()->OpenFileDialog(nullptr, TEXT("Select a Transfer Function file"),
-                                                  FPaths::GetProjectFilePath(), TEXT(""),
-                                                  TEXT("TF|*.txt"), EFileDialogFlags::None, files);
+    FDesktopPlatformModule::Get()->OpenFileDialog(
+        FSlateApplication::Get().FindBestParentWindowHandleForDialogs(nullptr),
+        TEXT("Select a Transfer Function file"), FPaths::GetProjectFilePath(), TEXT(""),
+        TEXT("TF|*.txt"), EFileDialogFlags::None, files);
     if (files.IsEmpty())
         return;
 

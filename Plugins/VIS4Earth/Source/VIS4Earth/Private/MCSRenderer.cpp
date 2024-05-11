@@ -329,8 +329,9 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
     if (!indexBuffer.IsValid() || indexBuffer->GetSize() != bufSz) {
         FRHIResourceCreateInfo info(TEXT("Marching Square Create Index Buffer") TEXT(" in ")
                                         TEXT(__FUNCTION__));
-        indexBuffer = RHICmdList.CreateVertexBuffer(bufSz, BUF_VertexBuffer | BUF_Static,
-                                                    ERHIAccess::VertexOrIndexBuffer, info);
+        indexBuffer =
+            RHICmdList.CreateIndexBuffer(sizeof(uint32), bufSz, BUF_VertexBuffer | BUF_Static,
+                                         ERHIAccess::VertexOrIndexBuffer, info);
     }
     dat = RHICmdList.LockBuffer(indexBuffer, 0, bufSz, RLM_WriteOnly);
     FMemory::Memmove(dat, indices.GetData(), bufSz);

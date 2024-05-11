@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Components/WidgetComponent.h"
+
 #include "GeoComponent.h"
 #include "VolumeDataComponent.h"
 
@@ -36,13 +38,33 @@ class VIS4EARTH_API ADVRActor : public AActor {
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UTexture2D> PreIntegratedTF;
 
+    UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
+    TObjectPtr<UWidgetComponent> UI;
+    UFUNCTION()
+    void OnButtonClicked_LoadRAWVolume();
+    UFUNCTION()
+    void OnButtonClicked_LoadTransferFunction();
+    UFUNCTION()
+    void OnCheckBoxStateChanged_UsePreIntegratedTF(bool Checked);
+
     ADVRActor();
     ~ADVRActor() { destroyRenderer(); }
 
+    void PostLoad() override {
+        Super::PostLoad();
+
+        generatePreIntegratedTF();
+        setupRenderer();
+    }
+
     void Destroyed() override {
         Super::Destroyed();
+
         destroyRenderer();
     }
+
+  protected:
+    virtual void BeginPlay() override;
 
   private:
     TSharedPtr<FDVRRenderer> renderer;
@@ -51,6 +73,9 @@ class VIS4EARTH_API ADVRActor : public AActor {
     void setupRenderer();
     void destroyRenderer();
     void generatePreIntegratedTF();
+
+    void fromUIToMembers();
+    void fromMembersToUI();
 
 #ifdef WITH_EDITOR
   public:

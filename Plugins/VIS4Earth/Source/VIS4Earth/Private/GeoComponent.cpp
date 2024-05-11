@@ -37,6 +37,16 @@ void UGeoComponent::checkAndCorrectParameters() {
         HeightRange[1] = HeightRange[0];
 }
 
+void UGeoComponent::onGeographicsChanged() {
+    checkAndCorrectParameters();
+
+    if (GeoRef.IsValid())
+        SetWorldLocation(GeoRef->TransformLongitudeLatitudeHeightPositionToUnreal(FVector(
+            LongtitudeRange[0], .5 * (LatitudeRange[0] + LatitudeRange[1]), HeightRange[1])));
+
+    OnGeographicsChanged.Broadcast(this);
+}
+
 void UGeoComponent::processError(const FString &ErrMsg) {
     FNotificationInfo info(FText::FromString(ErrMsg));
 

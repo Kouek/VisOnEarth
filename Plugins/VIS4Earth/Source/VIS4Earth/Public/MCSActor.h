@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+
 #include "GeoComponent.h"
 #include "VolumeDataComponent.h"
 
@@ -38,6 +39,12 @@ class VIS4EARTH_API AMCSActor : public AActor {
 
     AMCSActor();
     ~AMCSActor() { destroyRenderer(); }
+
+    void PostLoad() override {
+        Super::PostLoad();
+
+        setupRenderer();
+    }
 
     void Destroyed() override {
         Super::Destroyed();

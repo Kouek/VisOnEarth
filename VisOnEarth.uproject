@@ -1,6 +1,6 @@
 {
 	"FileVersion": 3,
-	"EngineAssociation": "5.3",
+	"EngineAssociation": "{53783716-47EE-015C-C97F-F6B7654E4565}",
 	"Category": "",
 	"Description": "",
 	"Modules": [
@@ -26,6 +26,7 @@
 				"Win64",
 				"Mac",
 				"Linux",
+				"LinuxArm64",
 				"Android",
 				"IOS"
 			]
