@@ -13,14 +13,17 @@ Texture2D<float4> TFInput;
 
 struct V2P {
     float4 Position : SV_POSITION;
-    float Scalar : ATTRIBUTE;
+    float3 Normal : ATTRIBUTE0;
+    float Scalar : ATTRIBUTE1;
 };
 
 V2P VS(
 	in float3 Position : ATTRIBUTE0,
-	in float Scalar : ATTRIBUTE1) {
+    in float3 Normal : ATTRIBUTE1,
+	in float Scalar : ATTRIBUTE2) {
     V2P v2p;
     v2p.Position = float4(Position, 1.f);
+    v2p.Normal = Normal;
     v2p.Scalar = Scalar;
     
     const float2 heightToCntrRngEarthLong = HeightRng + FloatInvScale * float2(EarthLong, EarthLong);
@@ -35,9 +38,10 @@ V2P VS(
 }
 
 float4 PS(in V2P v2p) : SV_Target0 {
-    float4 color = TFInput.SampleLevel(TFSamplerState, float2(v2p.Scalar, .5f), 0);
-    color.a = 1.f;
+    //float4 color = TFInput.SampleLevel(TFSamplerState, float2(v2p.Scalar, .5f), 0);
+    //color.a = 1.f;
     
-    return color;
+    //return color;
+    return float4(v2p.Normal, 1.f);
 }
 

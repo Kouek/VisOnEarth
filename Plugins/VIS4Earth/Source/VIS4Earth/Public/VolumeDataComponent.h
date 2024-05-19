@@ -3,6 +3,7 @@
 #pragma once
 
 #include "Components/ActorComponent.h"
+#include "Components/WidgetComponent.h"
 #include "CoreMinimal.h"
 
 #include "CesiumGeoreference.h"
@@ -17,9 +18,9 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
 
   public:
     UPROPERTY(EditAnywhere, Category = "VIS4Earth|Smooth")
-    ESmoothType SmoothType = ESmoothType::Max;
+    EVolumeSmoothType VolumeSmoothType = EVolumeSmoothType::Max;
     UPROPERTY(EditAnywhere, Category = "VIS4Earth|Smooth")
-    ESmoothDimension SmoothDimension = ESmoothDimension::XYZ;
+    EVolumeSmoothDimension VolumeSmoothDimension = EVolumeSmoothDimension::XYZ;
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
     ESupportedVoxelType ImportVoxelType = VolumeData::LoadFromFileDesc::DefVoxTy;
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
@@ -37,6 +38,17 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     UPROPERTY(VisibleAnywhere, Transient, Category = "VIS4Earth")
     TObjectPtr<UCurveLinearColor> TransferFunctionCurve;
 
+    UFUNCTION()
+    void OnComboBoxString_VolumeSmoothTypeSelectionChanged(FString SelectedItem,
+                                                           ESelectInfo::Type SelectionType);
+    UFUNCTION()
+    void OnComboBoxString_VolumeSmoothDimensionSelectionChanged(FString SelectedItem,
+                                                                ESelectInfo::Type SelectionType);
+    UFUNCTION()
+    void OnButton_LoadRAWVolumeClicked();
+    UFUNCTION()
+    void OnButton_LoadTFClicked();
+
     UFUNCTION(CallInEditor, Category = "VIS4Earth")
     void LoadRAWVolume();
     UFUNCTION(CallInEditor, Category = "VIS4Earth")
@@ -52,7 +64,9 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
     FOnVolumeDataChanged OnVolumeDataChanged;
     FOnTransferFunctionDataChanged OnTransferFunctionDataChanged;
 
-    UVolumeDataComponent() { createDefaultTFTexture(); }
+    UVolumeDataComponent();
+
+    UUserWidget *GetUI() const { return ui.Get(); }
 
     void SetKeepVolumeInCPU(bool Keep) {
         keepVolumeInCPU = Keep;
@@ -76,16 +90,21 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
                  Pos.Z * voxPerVolYxX + Pos.Y * VolumeTexture->GetSizeX() + Pos.X);
     }
 
-    void PostLoad() override {
+    virtual void PostLoad() override {
         Super::PostLoad();
         createDefaultTFTexture();
     }
+
+  protected:
+    virtual void BeginPlay() override;
 
   private:
     size_t voxPerVolYxX;
     bool keepVolumeInCPU = false;
     bool keepSmoothedVolume = false;
     VolumeData::LoadFromFileDesc prevVolumeDataDesc;
+
+    TObjectPtr<UUserWidget> ui;
 
     TArray<uint8> volumeCPUData;
     TArray<float> volumeCPUDataSmoothed;
@@ -106,8 +125,8 @@ class VIS4EARTH_API UVolumeDataComponent : public UActorComponent {
             return;
 
         auto name = PropChngedEv.MemberProperty->GetFName();
-        if (name == GET_MEMBER_NAME_CHECKED(UVolumeDataComponent, SmoothType) ||
-            name == GET_MEMBER_NAME_CHECKED(UVolumeDataComponent, SmoothDimension)) {
+        if (name == GET_MEMBER_NAME_CHECKED(UVolumeDataComponent, VolumeSmoothType) ||
+            name == GET_MEMBER_NAME_CHECKED(UVolumeDataComponent, VolumeSmoothDimension)) {
             generateSmoothedVolume();
             return;
         }

@@ -37,19 +37,53 @@ class VIS4EARTH_API AMCSActor : public AActor {
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UVolumeDataComponent> VolumeComponent;
 
+    UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
+    TObjectPtr<UWidgetComponent> UIComponent;
+    UFUNCTION()
+    void OnComboBoxString_LineStyleSelectionChanged(FString SelectedItem,
+                                                    ESelectInfo::Type SelectionType);
+    UFUNCTION()
+    void OnCheckBox_UseLerpCheckStateChanged(bool Checked) {
+        UseLerp = Checked;
+        setupRenderer(true);
+    }
+    UFUNCTION()
+    void OnCheckBox_UseSmoothedVolumeCheckStateChanged(bool Checked) {
+        UseSmoothedVolume = Checked;
+        setupRenderer(true);
+    }
+    UFUNCTION()
+    void OnEditableText_HeightRangeMinTextChanged(const FText &Text) {
+        HeightRange[0] = FCString::Atoi(*Text.ToString());
+        setupRenderer(true);
+    }
+    UFUNCTION()
+    void OnEditableText_HeightRangeMaxTextChanged(const FText &Text) {
+        HeightRange[1] = FCString::Atoi(*Text.ToString());
+        setupRenderer(true);
+    }
+    UFUNCTION()
+    void OnEditableText_IsoValueTextChanged(const FText &Text) {
+        IsoValue = FCString::Atof(*Text.ToString());
+        setupRenderer(true);
+    }
+
     AMCSActor();
     ~AMCSActor() { destroyRenderer(); }
 
-    void PostLoad() override {
+    virtual void PostLoad() override {
         Super::PostLoad();
 
         setupRenderer();
     }
 
-    void Destroyed() override {
+    virtual void Destroyed() override {
         Super::Destroyed();
         destroyRenderer();
     }
+
+  protected:
+    virtual void BeginPlay() override;
 
   private:
     TSharedPtr<FMCSRenderer> renderer;

@@ -22,7 +22,7 @@ class VIS4EARTH_API FTFPreIntegrator {
     };
     static TArray<FFloat16> Exec(const Parameters &Params) {
         auto tfDat = reinterpret_cast<std::array<FFloat16, 4> *>(
-            Params.TransferFunctionTexture->PlatformData->Mips[0].BulkData.Lock(
+            Params.TransferFunctionTexture->GetPlatformData()->Mips[0].BulkData.Lock(
                 EBulkDataLockFlags::LOCK_READ_ONLY));
 
         TArray<std::array<float, 4>> tfIntDat;
@@ -72,7 +72,7 @@ class VIS4EARTH_API FTFPreIntegrator {
 
                 ++tfPreIntDatPtr;
             }
-        Params.TransferFunctionTexture->PlatformData->Mips[0].BulkData.Unlock();
+        Params.TransferFunctionTexture->GetPlatformData()->Mips[0].BulkData.Unlock();
 
         return tfPreIntDat;
     }

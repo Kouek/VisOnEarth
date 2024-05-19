@@ -2,9 +2,9 @@
 
 #pragma once
 
+#include "Components/WidgetComponent.h"
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
-#include "Components/WidgetComponent.h"
 
 #include "GeoComponent.h"
 #include "VolumeDataComponent.h"
@@ -39,25 +39,39 @@ class VIS4EARTH_API ADVRActor : public AActor {
     TObjectPtr<UTexture2D> PreIntegratedTF;
 
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
-    TObjectPtr<UWidgetComponent> UI;
+    TObjectPtr<UWidgetComponent> UIComponent;
     UFUNCTION()
-    void OnButtonClicked_LoadRAWVolume();
+    void OnCheckBox_UsePreIntegratedTFCheckStateChanged(bool Checked) {
+        UsePreIntegratedTF = Checked;
+        generatePreIntegratedTF();
+    }
     UFUNCTION()
-    void OnButtonClicked_LoadTransferFunction();
+    void OnEditableText_MaxStepCountTextChanged(const FText &Text) {
+        MaxStepCount = FCString::Atoi(*Text.ToString());
+        setupRenderer();
+    }
     UFUNCTION()
-    void OnCheckBoxStateChanged_UsePreIntegratedTF(bool Checked);
+    void OnEditableText_StepTextChanged(const FText &Text) {
+        Step = FCString::Atof(*Text.ToString());
+        setupRenderer();
+    }
+    UFUNCTION()
+    void OnEditableText_RelativeLightnessTextChanged(const FText &Text) {
+        RelativeLightness = FCString::Atof(*Text.ToString());
+        setupRenderer();
+    }
 
     ADVRActor();
     ~ADVRActor() { destroyRenderer(); }
 
-    void PostLoad() override {
+    virtual void PostLoad() override {
         Super::PostLoad();
 
         generatePreIntegratedTF();
         setupRenderer();
     }
 
-    void Destroyed() override {
+    virtual void Destroyed() override {
         Super::Destroyed();
 
         destroyRenderer();
@@ -73,9 +87,6 @@ class VIS4EARTH_API ADVRActor : public AActor {
     void setupRenderer();
     void destroyRenderer();
     void generatePreIntegratedTF();
-
-    void fromUIToMembers();
-    void fromMembersToUI();
 
 #ifdef WITH_EDITOR
   public:

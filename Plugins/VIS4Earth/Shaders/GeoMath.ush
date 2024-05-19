@@ -99,3 +99,15 @@ float HeightToCenter(in float heightToCntrEarthLong, in float latitude) {
     float sinL = sin(latitude);
     return heightToCntrEarthLong * sqrt(1.f + EarthShortOverLongSqrMinusOne * sinL * sinL);
 }
+
+void NormalizedVoxelPositionToBLH(
+    inout float3 NVPosInBLHOut, inout float3 BLHMin,
+    inout float3 BLHDlt, in float2 heightToCntrRngEarthLong) {
+    NVPosInBLHOut.xy = BLHMin.xy + NVPosInBLHOut.xy * BLHDlt.xy;
+    float2 realheightToCntrRng = float2(HeightToCenter(heightToCntrRngEarthLong[0], NVPosInBLHOut.y),
+                    HeightToCenter(heightToCntrRngEarthLong[1], NVPosInBLHOut.y));
+    BLHMin.z = realheightToCntrRng[0];
+    BLHDlt.z = realheightToCntrRng[1] - realheightToCntrRng[0];
+    
+    NVPosInBLHOut.z = BLHMin.z + NVPosInBLHOut.z * BLHDlt.z;
+}

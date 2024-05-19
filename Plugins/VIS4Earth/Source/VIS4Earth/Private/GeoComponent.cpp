@@ -2,6 +2,7 @@
 
 #include <array>
 
+#include "Components/EditableText.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "MeshDescription.h"
 #include "MeshDescriptionBuilder.h"
@@ -83,9 +84,9 @@ UStaticMesh *UGeoComponent::GenerateGeoMesh(int32 LongtitudeTessellation,
     meshDescBuilder.SetNumUVLayers(2);
 
     struct VertexAttr {
-        FVertexID id;
-        FVector norm;
-        FVector texCoord;
+        FVertexID ID;
+        FVector Normal;
+        FVector TexCoord;
     };
     TArray<VertexAttr> vertices;
     int btmSurfVertStart;
@@ -100,20 +101,20 @@ UStaticMesh *UGeoComponent::GenerateGeoMesh(int32 LongtitudeTessellation,
             for (int latIdx = 0; latIdx < LatitudeTessellation; ++latIdx)
                 for (int lonIdx = 0; lonIdx < LongtitudeTessellation; ++lonIdx) {
                     vertices.Emplace();
-                    vertices.Last().texCoord.X = 1. * lonIdx / (LongtitudeTessellation - 1);
-                    vertices.Last().texCoord.Y = top ? 1. : 0.;
-                    vertices.Last().texCoord.Z = 1. * latIdx / (LatitudeTessellation - 1);
+                    vertices.Last().TexCoord.X = 1. * lonIdx / (LongtitudeTessellation - 1);
+                    vertices.Last().TexCoord.Y = top ? 1. : 0.;
+                    vertices.Last().TexCoord.Z = 1. * latIdx / (LatitudeTessellation - 1);
 
-                    auto lon = LongtitudeRange[0] + vertices.Last().texCoord.X * lonExt;
-                    auto lat = LatitudeRange[0] + vertices.Last().texCoord.Z * latExt;
-                    vertices.Last().texCoord.Z = 1.f - vertices.Last().texCoord.Z;
+                    auto lon = LongtitudeRange[0] + vertices.Last().TexCoord.X * lonExt;
+                    auto lat = LatitudeRange[0] + vertices.Last().TexCoord.Z * latExt;
+                    vertices.Last().TexCoord.Z = 1.f - vertices.Last().TexCoord.Z;
 
                     auto tmp =
                         GeoRef->TransformLongitudeLatitudeHeightPositionToUnreal({lon, lat, h});
-                    vertices.Last().id = meshDescBuilder.AppendVertex(tmp);
+                    vertices.Last().ID = meshDescBuilder.AppendVertex(tmp);
 
                     tmp.Normalize();
-                    vertices.Last().norm = top ? tmp : -tmp;
+                    vertices.Last().Normal = top ? tmp : -tmp;
                 }
         };
         genSurfVertices(true);
@@ -127,11 +128,11 @@ UStaticMesh *UGeoComponent::GenerateGeoMesh(int32 LongtitudeTessellation,
             std::array<FVertexInstanceID, 3> instIDs;
             for (uint8 i = 0; i < 3; ++i) {
                 auto vert = vertices[triIndices[i]];
-                instIDs[i] = meshDescBuilder.AppendInstance(vert.id);
-                meshDescBuilder.SetInstanceNormal(instIDs[i], vert.norm);
+                instIDs[i] = meshDescBuilder.AppendInstance(vert.ID);
+                meshDescBuilder.SetInstanceNormal(instIDs[i], vert.Normal);
                 meshDescBuilder.SetInstanceUV(instIDs[i],
-                                              FVector2D(vert.texCoord.X, vert.texCoord.Y), 0);
-                meshDescBuilder.SetInstanceUV(instIDs[i], FVector2D(vert.texCoord.Z, 0.), 1);
+                                              FVector2D(vert.TexCoord.X, vert.TexCoord.Y), 0);
+                meshDescBuilder.SetInstanceUV(instIDs[i], FVector2D(vert.TexCoord.Z, 0.), 1);
             }
             meshDescBuilder.AppendTriangle(instIDs[0], instIDs[1], instIDs[2], polyGrpID);
         };
@@ -180,4 +181,41 @@ UStaticMesh *UGeoComponent::GenerateGeoMesh(int32 LongtitudeTessellation,
     mesh->BuildFromMeshDescriptions(meshDescs, buildMesDescParams);
 
     return mesh;
+}
+
+struct GeoComponentNamesInUI {
+    static constexpr std::array LongtitudeRange = {TEXT("EditableText_LongtitudeRangeMin"),
+                                                   TEXT("EditableText_LongtitudeRangeMax")};
+    static constexpr std::array LatitudeRange = {TEXT("EditableText_LatitudeRangeMin"),
+                                                 TEXT("EditableText_LatitudeRangeMax")};
+    static constexpr std::array HeightRange = {TEXT("EditableText_HeightRangeMin"),
+                                               TEXT("EditableText_HeightRangeMax")};
+};
+
+void UGeoComponent::BeginPlay() {
+    Super::BeginPlay();
+
+    {
+        auto realUIClass = LoadClass<UUserWidget>(
+            nullptr, TEXT("WidgetBlueprint'/VIS4Earth/UI_GeoCmpt.UI_GeoCmpt_C'"));
+        ui = CreateWidget(GetWorld(), realUIClass);
+
+        for (int32 i = 0; i < 2; ++i) {
+            Cast<UEditableText>(ui->GetWidgetFromName(GeoComponentNamesInUI::LongtitudeRange[i]))
+                ->SetText(FText::FromString(FString::SanitizeFloat(LongtitudeRange[i])));
+            Cast<UEditableText>(ui->GetWidgetFromName(GeoComponentNamesInUI::LatitudeRange[i]))
+                ->SetText(FText::FromString(FString::SanitizeFloat(LatitudeRange[i])));
+            Cast<UEditableText>(ui->GetWidgetFromName(GeoComponentNamesInUI::HeightRange[i]))
+                ->SetText(FText::FromString(FString::SanitizeFloat(HeightRange[i])));
+        }
+
+        VIS4EARTH_UI_ADD_SLOT(UGeoComponent, this, ui, EditableText, LongtitudeRangeMin,
+                              TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(UGeoComponent, this, ui, EditableText, LongtitudeRangeMax,
+                              TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(UGeoComponent, this, ui, EditableText, LatitudeRangeMin, TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(UGeoComponent, this, ui, EditableText, LatitudeRangeMax, TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(UGeoComponent, this, ui, EditableText, HeightRangeMin, TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(UGeoComponent, this, ui, EditableText, HeightRangeMax, TextChanged);
+    }
 }

@@ -3,6 +3,7 @@
 #include "Data.h"
 
 #include <array>
+#include <map>
 
 TVariant<UVolumeTexture *, FString>
 VolumeData::LoadFromFile(const LoadFromFileDesc &Desc,
@@ -120,9 +121,10 @@ VolumeData::SmoothFromFlatArray(const SmoothFromFlatArrayDesc &Desc,
     auto smoothKernelMax = [&]<SupportedVoxelType T>(const T *dat, const FIntVector3 &pos) -> T {
         auto scalar = std::numeric_limits<T>::min();
         FIntVector3 dPos(pos.X == 0 ? 0 : -1, pos.Y == 0 ? 0 : -1,
-                         Desc.SmoothDim == ESmoothDimension::XY || pos.Z == 0 ? 0 : -1);
+                         Desc.SmoothDim == EVolumeSmoothDimension::XY || pos.Z == 0 ? 0 : -1);
         for (; dPos.Z <
-               (Desc.SmoothDim == ESmoothDimension::XY || pos.Z == Desc.Dimension.Z - 1 ? 1 : 2);
+               (Desc.SmoothDim == EVolumeSmoothDimension::XY || pos.Z == Desc.Dimension.Z - 1 ? 1
+                                                                                              : 2);
              ++dPos.Z)
             for (; dPos.Y < (pos.Y == Desc.Dimension.Y - 1 ? 1 : 2); ++dPos.Y)
                 for (; dPos.X < (pos.X == Desc.Dimension.X - 1 ? 1 : 2); ++dPos.X) {
@@ -137,9 +139,10 @@ VolumeData::SmoothFromFlatArray(const SmoothFromFlatArrayDesc &Desc,
         float scalar = 0.f;
         int32 num = 0.f;
         FIntVector3 dPos(pos.X == 0 ? 0 : -1, pos.Y == 0 ? 0 : -1,
-                         Desc.SmoothDim != ESmoothDimension::XY || pos.Z == 0 ? 0 : -1);
+                         Desc.SmoothDim != EVolumeSmoothDimension::XY || pos.Z == 0 ? 0 : -1);
         for (; dPos.Z <
-               (Desc.SmoothDim != ESmoothDimension::XY || pos.Z == Desc.Dimension.Z - 1 ? 1 : 2);
+               (Desc.SmoothDim != EVolumeSmoothDimension::XY || pos.Z == Desc.Dimension.Z - 1 ? 1
+                                                                                              : 2);
              ++dPos.Z)
             for (; dPos.Y < (pos.Y == Desc.Dimension.Y - 1 ? 1 : 2); ++dPos.Y)
                 for (; dPos.X < (pos.X == Desc.Dimension.X - 1 ? 1 : 2); ++dPos.X) {
@@ -158,8 +161,9 @@ VolumeData::SmoothFromFlatArray(const SmoothFromFlatArrayDesc &Desc,
         for (pos.Z = 0; pos.Z < Desc.Dimension.Z; ++pos.Z)
             for (pos.Y = 0; pos.Y < Desc.Dimension.Y; ++pos.Y)
                 for (pos.X = 0; pos.X < Desc.Dimension.X; ++pos.X) {
-                    newDat[idx] = Desc.SmoothTy == ESmoothType::Avg ? smoothKernelAvg(oldDat, pos)
-                                                                    : smoothKernelMax(oldDat, pos);
+                    newDat[idx] = Desc.SmoothTy == EVolumeSmoothType::Avg
+                                      ? smoothKernelAvg(oldDat, pos)
+                                      : smoothKernelMax(oldDat, pos);
                     ++idx;
                 }
 
@@ -245,16 +249,19 @@ TOptional<FString> TransferFunctionData::SaveToFile(const UCurveLinearColor *Cur
     if (!Curve)
         return FString("Invalid Curve.");
 
-    TMap<float, FVector4f> pnts;
+    std::map<float, FVector4f> pnts;
     {
         std::array<const FRichCurve *, 4> curves = {&Curve->FloatCurves[0], &Curve->FloatCurves[1],
                                                     &Curve->FloatCurves[2], &Curve->FloatCurves[3]};
         for (int32 i = 0; i < 4; ++i)
             for (auto itr = curves[i]->GetKeyIterator(); itr; ++itr) {
-                auto pnt = pnts.Find(itr->Time);
-                if (!pnt)
-                    pnt = &pnts.Emplace(itr->Time, Curve->GetLinearColorValue(itr->Time));
-                (*pnt)[i] = std::clamp(itr->Value * 255.f, 0.f, 255.f);
+                auto pnt = pnts.find(itr->Time);
+                if (pnt == pnts.end()) {
+                    auto [pntItr, _] =
+                        pnts.emplace(itr->Time, Curve->GetLinearColorValue(itr->Time));
+                    pnt = pntItr;
+                }
+                pnt->second[i] = std::clamp(itr->Value * 255.f, 0.f, 255.f);
             }
     }
 

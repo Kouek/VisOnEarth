@@ -43,8 +43,8 @@ IMPLEMENT_GLOBAL_SHADER(FVolumeSmoothShader, "/VIS4Earth/VolumeSmoother.usf", "S
 class VIS4EARTH_API FVolumeSmoother {
   public:
     struct Parameters {
-        ESmoothType SmoothType;
-        ESmoothDimension SmoothDimension;
+        EVolumeSmoothType SmoothType;
+        EVolumeSmoothDimension SmoothDimension;
         TObjectPtr<UVolumeTexture> VolumeTexture;
         TFunction<void(TSharedPtr<TArray<float>> VolDat)> FinishedCallback;
     };

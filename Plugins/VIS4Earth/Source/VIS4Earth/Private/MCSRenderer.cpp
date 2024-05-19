@@ -171,8 +171,14 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
     auto [vxMin, vxMax, vxExt] =
         VolumeData::GetVoxelMinMaxExtent(Params.VolumeComponent->GetVolumeVoxelType());
 
-    std::unordered_map<uint64, uint32> edge2vertIDs;
-    int32_t prevHeightVertNum = 0;
+    auto hashEdge = [](const FIntVector3 &edgeID) {
+        size_t hash = edgeID.X;
+        hash = (hash << 32) | edgeID.Y;
+        hash = (hash << 1) | edgeID.Z;
+        return std::hash<size_t>()(hash);
+    };
+    std::unordered_map<FIntVector3, uint32, decltype(hashEdge)> edge2vertIDs;
+
     TArray<VertexAttr> vertices;
     TArray<uint32> indices;
     auto addLineSeg = [&](auto &&func, const FIntVector3 &startPos, const FVector4f &scalars,
@@ -190,13 +196,12 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
             // *:   startPos
             // *>:  startPos + (1,0)
             // /*\: startPos + (0,1)
-            // ID(e0): [ ID(*) : 63bit | 0 : 1bit ]
-            // ID(e1): [ ID(*) : 63bit | 1 : 1bit ]
-            auto edgeID = static_cast<uint64>(startPos.Y + (i == 2 ? 1 : 0)) * voxPerVol.X +
-                          startPos.X + (i == 1 ? 1 : 0);
-            edgeID = (edgeID << 1) + (i == 1 || i == 3 ? 1 : 0);
+            // ID(e0) = (startPos.xy, 0)
+            // ID(e1) = (startPos.xy, 1)
+            FIntVector3 edgeID(startPos.X + (i == 1 ? 1 : 0), startPos.Y + (i == 2 ? 1 : 0),
+                               i == 1 || i == 3 ? 1 : 0);
             if (auto itr = edge2vertIDs.find(edgeID); itr != edge2vertIDs.end()) {
-                indices.Emplace(itr->second + prevHeightVertNum);
+                indices.Emplace(itr->second);
                 continue;
             }
 
@@ -226,7 +231,7 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
 
             indices.Emplace(vertices.Num());
             vertices.Emplace(pos, scalar);
-            edge2vertIDs.emplace(edgeID, indices.Last() - prevHeightVertNum);
+            edge2vertIDs.emplace(edgeID, indices.Last());
         }
 
         if constexpr (sizeof...(masks) >= 1)
@@ -236,7 +241,6 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
         FIntVector3 pos;
         for (pos.Z = Params.HeightRange[0]; pos.Z <= Params.HeightRange[1]; ++pos.Z) {
             edge2vertIDs.clear(); // hash map only stores vertices on the same height
-            prevHeightVertNum = vertices.Num();
 
             for (pos.Y = 0; pos.Y < voxPerVol.Y - 1; ++pos.Y)
                 for (pos.X = 0; pos.X < voxPerVol.X - 1; ++pos.X) {

@@ -22,12 +22,12 @@ enum class ESupportedVoxelType : uint8 {
     Float32 UMETA(DisplayName = "Float 32 bit")
 };
 UENUM()
-enum class ESmoothType : uint8 {
+enum class EVolumeSmoothType : uint8 {
     Avg = 0 UMETA(DisplayName = "Average"),
     Max UMETA(DisplayName = "Maximum")
 };
 UENUM()
-enum class ESmoothDimension : uint8 {
+enum class EVolumeSmoothDimension : uint8 {
     XYZ = 0 UMETA(DisplayName = "Smooth over XYZ Sapce"),
     XY UMETA(DisplayName = "Smooth over XY Plane")
 };
@@ -46,8 +46,9 @@ class VolumeData {
                  TOptional<std::reference_wrapper<TArray<uint8>>> VolumeOut = {});
 
     struct SmoothFromFlatArrayDesc {
-        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(ESmoothType, SmoothTy, ESmoothType::Avg)
-        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(ESmoothDimension, SmoothDim, ESmoothDimension::XYZ)
+        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(EVolumeSmoothType, SmoothTy, EVolumeSmoothType::Avg)
+        VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(EVolumeSmoothDimension, SmoothDim,
+                                         EVolumeSmoothDimension::XYZ)
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(ESupportedVoxelType, VoxTy, ESupportedVoxelType::None)
         VIS4EARTH_DEFINE_VAR_WITH_DEFVAL(FIntVector3, Dimension, FIntVector::ZeroValue)
         const TArray<uint8> &VolDat;

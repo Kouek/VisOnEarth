@@ -3,11 +3,76 @@
 #include <array>
 #include <map>
 
+#include "Components/Button.h"
+#include "Components/ComboBoxString.h"
+#include "Components/EditableText.h"
 #include "DesktopPlatformModule.h"
 #include "Framework/Notifications/NotificationManager.h"
 #include "Widgets/Notifications/SNotificationList.h"
 
 #include "VolumeSmoother.h"
+
+struct VolumeDataComponentNamesInUI {
+    static constexpr std::array ImportVolumeDim = {TEXT("EditableText_ImportVolumeDimX"),
+                                                   TEXT("EditableText_ImportVolumeDimY"),
+                                                   TEXT("EditableText_ImportVolumeDimZ")};
+    static constexpr std::array ImportVolumeTransformedAxis = {
+        TEXT("EditableText_ImportVolumeTransformedAxisX"),
+        TEXT("EditableText_ImportVolumeTransformedAxisY"),
+        TEXT("EditableText_ImportVolumeTransformedAxisZ")};
+};
+
+void UVolumeDataComponent::OnComboBoxString_VolumeSmoothTypeSelectionChanged(
+    FString SelectedItem, ESelectInfo::Type SelectionType) {
+    auto enumClass = StaticEnum<EVolumeSmoothType>();
+    for (int32 i = 0; i < enumClass->GetMaxEnumValue(); ++i)
+        if (enumClass->GetNameByIndex(i) == SelectedItem) {
+            VolumeSmoothType = static_cast<EVolumeSmoothType>(i);
+            break;
+        }
+
+    generateSmoothedVolume();
+}
+
+void UVolumeDataComponent::OnComboBoxString_VolumeSmoothDimensionSelectionChanged(
+    FString SelectedItem, ESelectInfo::Type SelectionType) {
+    auto enumClass = StaticEnum<EVolumeSmoothDimension>();
+    for (int32 i = 0; i < enumClass->GetMaxEnumValue(); ++i)
+        if (enumClass->GetNameByIndex(i) == SelectedItem) {
+            VolumeSmoothDimension = static_cast<EVolumeSmoothDimension>(i);
+            break;
+        }
+
+    generateSmoothedVolume();
+}
+
+void UVolumeDataComponent::OnButton_LoadRAWVolumeClicked() {
+    ImportVoxelType = static_cast<ESupportedVoxelType>(
+        Cast<UComboBoxString>(ui->GetWidgetFromName(TEXT("ComboBoxString_ImportVoxelType")))
+            ->GetSelectedIndex());
+    VolumeSmoothType = static_cast<EVolumeSmoothType>(
+        Cast<UComboBoxString>(ui->GetWidgetFromName(TEXT("ComboBoxString_VolumeSmoothType")))
+            ->GetSelectedIndex());
+    VolumeSmoothDimension = static_cast<EVolumeSmoothDimension>(
+        Cast<UComboBoxString>(ui->GetWidgetFromName(TEXT("ComboBoxString_VolumeSmoothDimension")))
+            ->GetSelectedIndex());
+
+    for (int32 i = 0; i < 3; ++i) {
+        ImportVolumeTransformedAxis[i] = FCString::Atoi(
+            *Cast<UEditableText>(ui->GetWidgetFromName(
+                                     VolumeDataComponentNamesInUI::ImportVolumeTransformedAxis[i]))
+                 ->GetText()
+                 .ToString());
+        ImportVolumeDimension[i] = FCString::Atoi(
+            *Cast<UEditableText>(
+                 ui->GetWidgetFromName(VolumeDataComponentNamesInUI::ImportVolumeDim[i]))
+                 ->GetText()
+                 .ToString());
+    }
+    LoadRAWVolume();
+}
+
+void UVolumeDataComponent::OnButton_LoadTFClicked() { LoadTF(); }
 
 void UVolumeDataComponent::LoadRAWVolume() {
     FJsonSerializableArray files;
@@ -110,6 +175,45 @@ void UVolumeDataComponent::SyncTFCurveTexture() {
     OnTransferFunctionDataChanged.Broadcast(this);
 }
 
+UVolumeDataComponent::UVolumeDataComponent() { createDefaultTFTexture(); }
+
+void UVolumeDataComponent::BeginPlay() {
+    Super::BeginPlay();
+
+    {
+        auto realUIClass = LoadClass<UUserWidget>(
+            nullptr, TEXT("WidgetBlueprint'/VIS4Earth/UI_VolumeCmpt.UI_VolumeCmpt_C'"));
+        ui = CreateWidget(GetWorld(), realUIClass);
+
+        for (int32 i = 0; i < 3; ++i) {
+            Cast<UEditableText>(
+                ui->GetWidgetFromName(VolumeDataComponentNamesInUI::ImportVolumeTransformedAxis[i]))
+                ->SetText(FText::FromString(FString::FromInt(ImportVolumeTransformedAxis[i])));
+            Cast<UEditableText>(
+                ui->GetWidgetFromName(VolumeDataComponentNamesInUI::ImportVolumeDim[i]))
+                ->SetText(FText::FromString(FString::FromInt(ImportVolumeDimension[i])));
+        }
+
+        VIS4EARTH_UI_COMBOBOXSTRING_ADD_OPTIONS(ui, ImportVoxelType);
+        VIS4EARTH_UI_COMBOBOXSTRING_ADD_OPTIONS(ui, VolumeSmoothType);
+        VIS4EARTH_UI_COMBOBOXSTRING_ADD_OPTIONS(ui, VolumeSmoothDimension);
+
+        Cast<UComboBoxString>(ui->GetWidgetFromName(TEXT("ComboBoxString_ImportVoxelType")))
+            ->SetSelectedIndex(static_cast<int32>(ImportVoxelType));
+        Cast<UComboBoxString>(ui->GetWidgetFromName(TEXT("ComboBoxString_VolumeSmoothType")))
+            ->SetSelectedIndex(static_cast<int32>(VolumeSmoothType));
+        Cast<UComboBoxString>(ui->GetWidgetFromName(TEXT("ComboBoxString_VolumeSmoothDimension")))
+            ->SetSelectedIndex(static_cast<int32>(VolumeSmoothDimension));
+
+        VIS4EARTH_UI_ADD_SLOT(UVolumeDataComponent, this, ui, Button, LoadRAWVolume, Clicked);
+        VIS4EARTH_UI_ADD_SLOT(UVolumeDataComponent, this, ui, Button, LoadTF, Clicked);
+        VIS4EARTH_UI_ADD_SLOT(UVolumeDataComponent, this, ui, ComboBoxString, VolumeSmoothType,
+                              SelectionChanged);
+        VIS4EARTH_UI_ADD_SLOT(UVolumeDataComponent, this, ui, ComboBoxString, VolumeSmoothDimension,
+                              SelectionChanged);
+    }
+}
+
 void UVolumeDataComponent::generateSmoothedVolume() {
     if (!VolumeTexture)
         return;
@@ -119,8 +223,8 @@ void UVolumeDataComponent::generateSmoothedVolume() {
     }
 
     FVolumeSmoother::Exec(
-        {.SmoothType = SmoothType,
-         .SmoothDimension = SmoothDimension,
+        {.SmoothType = VolumeSmoothType,
+         .SmoothDimension = VolumeSmoothDimension,
          .VolumeTexture = VolumeTexture,
          .FinishedCallback = [this](TSharedPtr<TArray<float>> VolDat) {
              VolumeTextureSmoothed = UVolumeTexture::CreateTransient(
@@ -160,6 +264,8 @@ void UVolumeDataComponent::createDefaultTFTexture() {
         }
     }
     DefaultTransferFunctionTexture = TransferFunctionData::FromFlatArrayToTexture(dat);
+
+    OnTransferFunctionDataChanged.Broadcast(this);
 }
 
 void UVolumeDataComponent::processError(const FString &ErrMsg) {

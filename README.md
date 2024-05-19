@@ -20,7 +20,13 @@ The core library is encapsulated in [`Plugins/VIS4Earth`](./Plugins/VIS4Earth/RE
 
 ### Isosurface Rendering
 
-- [ ] Isosurface Rendering
+- [x] Marching Cube and Isosurface Rendering
+- [ ] Marching Cube on GPU
+
+### Isospleth Rendering
+
+- [x] Marching Square and Isopleth Rendering
+- [ ] Marching Square on GPU
 
 ## Gallery
 

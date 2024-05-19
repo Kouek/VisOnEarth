@@ -2,27 +2,16 @@
 
 #include <array>
 
-#include "Components/Button.h"
 #include "Components/CheckBox.h"
 #include "Components/EditableText.h"
+#include "Components/NamedSlot.h"
 #include "EngineModule.h"
 #include "ShaderParameterStruct.h"
 
 #include "Runtime/Renderer/Private/SceneRendering.h"
 
 #include "TFPreIntegrator.h"
-
-void ADVRActor::OnButtonClicked_LoadRAWVolume() {
-    fromUIToMembers();
-    VolumeComponent->LoadRAWVolume();
-}
-
-void ADVRActor::OnButtonClicked_LoadTransferFunction() { VolumeComponent->LoadTF(); }
-
-void ADVRActor::OnCheckBoxStateChanged_UsePreIntegratedTF(bool Checked) {
-    UsePreIntegratedTF = Checked;
-    generatePreIntegratedTF();
-}
+#include "Util.h"
 
 ADVRActor::ADVRActor() {
     GeoComponent = CreateDefaultSubobject<UGeoComponent>(TEXT("Geographics"));
@@ -30,8 +19,8 @@ ADVRActor::ADVRActor() {
 
     VolumeComponent = CreateDefaultSubobject<UVolumeDataComponent>(TEXT("VolumeData"));
 
-    UI = CreateDefaultSubobject<UWidgetComponent>(TEXT("UI"));
-    UI->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepRelativeTransform);
+    UIComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("UI"));
+    UIComponent->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepRelativeTransform);
 
     generatePreIntegratedTF();
     setupRenderer();
@@ -45,28 +34,30 @@ void ADVRActor::BeginPlay() {
         auto realUIClass =
             LoadClass<UUserWidget>(nullptr, TEXT("WidgetBlueprint'/VIS4Earth/UI_DVR.UI_DVR_C'"));
 
-        UI->SetDrawAtDesiredSize(true);
-        UI->SetWidgetClass(realUIClass);
-        UI->SetWidgetSpace(EWidgetSpace::Screen);
+        UIComponent->SetDrawAtDesiredSize(true);
+        UIComponent->SetWidgetClass(realUIClass);
+        UIComponent->SetWidgetSpace(EWidgetSpace::Screen);
 
-        fromMembersToUI();
+        auto ui = UIComponent->GetUserWidgetObject();
+        Cast<UCheckBox>(ui->GetWidgetFromName(TEXT("CheckBox_UsePreIntegratedTF")))
+            ->SetCheckedState(UsePreIntegratedTF ? ECheckBoxState::Checked
+                                                 : ECheckBoxState::Unchecked);
+        Cast<UEditableText>(ui->GetWidgetFromName(TEXT("EditableText_Step")))
+            ->SetText(FText::FromString(FString::SanitizeFloat(Step)));
+        Cast<UEditableText>(ui->GetWidgetFromName(TEXT("EditableText_MaxStepCount")))
+            ->SetText(FText::FromString(FString::FromInt(MaxStepCount)));
+        Cast<UEditableText>(ui->GetWidgetFromName(TEXT("EditableText_RelativeLightness")))
+            ->SetText(FText::FromString(FString::SanitizeFloat(RelativeLightness)));
 
-#define ADD_SLOT(Name)                                                                             \
-    {                                                                                              \
-        auto btn = Cast<UButton>(                                                                  \
-            UI->GetUserWidgetObject()->GetWidgetFromName(TEXT("Button_") TEXT(#Name)));            \
-        btn->OnClicked.AddDynamic(this, &ADVRActor::OnButtonClicked_##Name);                       \
-    }
-        ADD_SLOT(LoadRAWVolume)
-        ADD_SLOT(LoadTransferFunction)
-#undef ADD_SLOT
-#define ADD_SLOT(Name)                                                                             \
-    {                                                                                              \
-        auto checkBox = Cast<UCheckBox>(                                                           \
-            UI->GetUserWidgetObject()->GetWidgetFromName(TEXT("CheckBox_") TEXT(#Name)));          \
-        checkBox->OnCheckStateChanged.AddDynamic(this, &ADVRActor::OnCheckBoxStateChanged_##Name); \
-    }
-        ADD_SLOT(UsePreIntegratedTF)
+        Cast<UNamedSlot>(ui->GetWidgetFromName(TEXT("NamedSlot_UI_VolumeCmpt")))
+            ->SetContent(VolumeComponent->GetUI());
+        Cast<UNamedSlot>(ui->GetWidgetFromName(TEXT("NamedSlot_UI_GeoCmpt")))
+            ->SetContent(GeoComponent->GetUI());
+
+        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, CheckBox, UsePreIntegratedTF, CheckStateChanged);
+        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, EditableText, MaxStepCount, TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, EditableText, Step, TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, EditableText, RelativeLightness, TextChanged);
     }
 }
 
@@ -140,31 +131,4 @@ void ADVRActor::generatePreIntegratedTF() {
     PreIntegratedTF->UpdateResource();
 
     setupRenderer();
-}
-
-struct NamesInUI {
-    static constexpr std::array ImportedVolumeDim = {TEXT("EditableText_ImportedVolumeDimX"),
-                                                     TEXT("EditableText_ImportedVolumeDimY"),
-                                                     TEXT("EditableText_ImportedVolumeDimZ")};
-};
-
-void ADVRActor::fromUIToMembers() {
-    for (int32 i = 0; i < 3; ++i)
-        VolumeComponent->ImportVolumeDimension[i] =
-            FCString::Atoi(*Cast<UEditableText>(UI->GetUserWidgetObject()->GetWidgetFromName(
-                                                    NamesInUI::ImportedVolumeDim[i]))
-                                ->GetText()
-                                .ToString());
-}
-
-void ADVRActor::fromMembersToUI() {
-    for (int32 i = 0; i < 3; ++i)
-        Cast<UEditableText>(
-            UI->GetUserWidgetObject()->GetWidgetFromName(NamesInUI::ImportedVolumeDim[i]))
-            ->SetText(
-                FText::FromString(FString::FromInt(VolumeComponent->ImportVolumeDimension[i])));
-
-    Cast<UCheckBox>(
-        UI->GetUserWidgetObject()->GetWidgetFromName(TEXT("CheckBox_UsePreIntegratedTF")))
-        ->SetCheckedState(UsePreIntegratedTF ? ECheckBoxState::Checked : ECheckBoxState::Unchecked);
 }
