@@ -2,8 +2,8 @@
 
 #include "/Engine/Public/Platform.ush"
 
-static const float FloatScale = 1.f / 1048576.f;
-static const float FloatInvScale = 1048576.f;
+static const float FloatInvScale = 100000.f;
+static const float FloatScale = 1.f / FloatInvScale;
 
 static const float TwoPi = 2.f * 3.1415926f;
 
@@ -36,12 +36,12 @@ float4 IntersectEarthShell(
     for (int i = 1; i >= 0; --i) {
         float Delta = c - heightToCntrRngEarthLong[i] * heightToCntrRngEarthLong[i];
         Delta = b * b - 4.f * a * Delta;
-        if (Delta < 0.f)
-            continue;
-                
-        Delta = sqrt(Delta);
-        t[0][validCnt++] = (-b - Delta) * .5f / a;
-        t[0][validCnt++] = (-b + Delta) * .5f / a;
+        if (Delta >= 0.f) {
+            validCnt += 2;
+            Delta = sqrt(Delta);
+        }
+        t[0][(1 - i) * 2 + 0] = (-b - Delta) * .5f / a;
+        t[0][(1 - i) * 2 + 1] = (-b + Delta) * .5f / a;
     }
     if (validCnt == 0)
         return t;

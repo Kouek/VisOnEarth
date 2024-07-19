@@ -12,14 +12,12 @@ float2 RenderSize;
 float2 LonRng;
 float2 LatRng;
 float2 HeightRng;
-float4x4 EyeToEarth;
-float4x4 InvProj;
+float3 EyePosToEarth;
+float4x4 EarthToEye;
 SamplerState VolSamplerState;
 SamplerState TFSamplerState;
 Texture3D<float> VolInput;
 Texture2D<float4> TFInput;
-Texture2D<float> DepthInput;
-RWTexture2D<float4> ColorOutput;
 
 void TransformBLHToSamplePos(
     inout float3 BLHInSamplePosOut, inout float3 BLHMin,
@@ -31,16 +29,83 @@ void TransformBLHToSamplePos(
     BLHInSamplePosOut = (BLHInSamplePosOut - BLHMin) * BLHInvDlt;
 }
 
-[numthreads(THREAD_PER_GROUP_X, THREAD_PER_GROUP_Y, THREAD_PER_GROUP_Z)]
-void DVR(int3 dispatchThreadID : SV_DispatchThreadID) {
-#include "RayCastHead.ush"
+struct V2P {
+    float4 PositionUE : SV_POSITION;
+    float3 PositionEarth : ATTRIBUTE;
+};
+
+V2P VS(
+    in float3 Position : ATTRIBUTE0) {
+    V2P v2p;
+    v2p.PositionEarth = Position;
+    
+    const float2 heightToCntrRngEarthLong = HeightRng + FloatInvScale * float2(EarthLong, EarthLong);
+    
+    float3 BLHMin = float3(LonRng[0], LatRng[0], -1.f);
+    float3 BLHDlt = float3(LonRng[1] - LonRng[0], LatRng[1] - LatRng[0], 1.f);
+    NormalizedVoxelPositionToBLH(v2p.PositionEarth, BLHMin, BLHDlt, heightToCntrRngEarthLong);
+    v2p.PositionEarth = BLHToECEF(v2p.PositionEarth);
+    
+    v2p.PositionUE = float4(v2p.PositionEarth, 1.f);
+    v2p.PositionUE = mul(v2p.PositionUE, EarthToEye);
+    v2p.PositionEarth = FloatScale * v2p.PositionEarth;
+    
+    return v2p;
+}
+
+float4 PS(in V2P v2p) : SV_Target0 {
+    const float2 heightToCntrRngEarthLong = FloatScale * HeightRng + float2(EarthLong, EarthLong);
+
+    Ray ray;
+    ray.origin = FloatScale * EyePosToEarth;
+    ray.dir = normalize(v2p.PositionEarth - ray.origin);
+    
+    float step = FloatScale * Step;
+    float a = 0.f;
+    float3 rgb = float3(0.f, 0.f, 0.f);
+    float3 posDlt = step * ray.dir;
+    float3 BLHMin = float3(LonRng[0], LatRng[0], -1.f);
+    float3 BLHInvDlt = 1.f / float3(LonRng[1] - LonRng[0], LatRng[1] - LatRng[0], -1.f);
+    float4 tRng = IntersectEarthShell(heightToCntrRngEarthLong, ray);
+    int stepCnt = 0;
+
+    [unroll(2)]
+    for (int i = 0; i < 2; ++i) {
+        tRng[i * 2 + 0] = floor(tRng[i * 2 + 0] / step) * step;
+        tRng[i * 2 + 1] = ceil(tRng[i * 2 + 1] / step) * step;
+    }
+
+    [unroll(2)]
+    for (int start = 0; start <= 2; start += 2) {
+        if (tRng[start] < 0.f)
+            continue;
+        
         float t = tRng[start];
+        float3 pos = ray.origin + t * ray.dir;
+#if USE_PREINT_TF
+        float prevScalar;
+#endif
         int enterRng = 0;
         while (stepCnt <= MaxStepCnt && t <= tRng[start + 1]) {
             float3 samplePos = ECEFToBLH(pos);
             TransformBLHToSamplePos(samplePos, BLHMin, BLHInvDlt, heightToCntrRngEarthLong);
 
             if (all(samplePos >= float3(0.f, 0.f, 0.f)) && all(samplePos <= float3(1.f, 1.f, 1.f))) {
+#if USE_PREINT_TF
+                float scalar = VolInput.SampleLevel(VolSamplerState, samplePos, 0);
+                if (enterRng == 0)
+                    prevScalar = scalar;
+                float4 color = TFInput.SampleLevel(TFSamplerState, float2(prevScalar, scalar), 0);
+                color.a *= RelativeLightness;
+
+                rgb = rgb + (1.f - a) * color.rgb;
+                a = a + (1.f - a) * color.a;
+                if (a >= .95f)
+                    break;
+            
+                prevScalar = scalar;
+                ++enterRng;
+#else
                 ++enterRng;
                 
                 float scalar = VolInput.SampleLevel(VolSamplerState, samplePos, 0);
@@ -51,6 +116,7 @@ void DVR(int3 dispatchThreadID : SV_DispatchThreadID) {
                 a = a + (1.f - a) * color.a;
                 if (a >= .95f)
                     break;
+#endif
             }
             else if (enterRng != 0) // Leave the range after entered the range, braek
                 break;
@@ -59,40 +125,7 @@ void DVR(int3 dispatchThreadID : SV_DispatchThreadID) {
             t += step;
             ++stepCnt;
         }
-#include "RayCastTail.ush"
-}
-
-[numthreads(THREAD_PER_GROUP_X, THREAD_PER_GROUP_Y, THREAD_PER_GROUP_Z)]
-void PreIntDVR(int3 dispatchThreadID : SV_DispatchThreadID) {
-#include "RayCastHead.ush"
-    float t = tRng[start];
-    float prevScalar;
-    int enterRng = 0;
-    while (stepCnt <= MaxStepCnt && t <= tRng[start + 1]) {
-        float3 samplePos = ECEFToBLH(pos);
-        TransformBLHToSamplePos(samplePos, BLHMin, BLHInvDlt, heightToCntrRngEarthLong);
-
-        if (all(samplePos >= float3(0.f, 0.f, 0.f)) && all(samplePos <= float3(1.f, 1.f, 1.f))) {
-            float scalar = VolInput.SampleLevel(VolSamplerState, samplePos, 0);
-            if (enterRng == 0)
-                prevScalar = scalar;
-            float4 color = TFInput.SampleLevel(TFSamplerState, float2(prevScalar, scalar), 0);
-            color.a *= RelativeLightness;
-
-            rgb = rgb + (1.f - a) * color.rgb;
-            a = a + (1.f - a) * color.a;
-            if (a >= .95f)
-                break;
-            
-            prevScalar = scalar;
-            ++enterRng;
-        }
-        else if (enterRng != 0) // Leave the range after entered the range, braek
-            break;
-            
-        pos += posDlt;
-        t += step;
-        ++stepCnt;
     }
-#include "RayCastTail.ush"
+
+    return float4(rgb, a);
 }

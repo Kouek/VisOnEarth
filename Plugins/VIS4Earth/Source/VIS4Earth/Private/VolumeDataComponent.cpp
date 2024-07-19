@@ -86,12 +86,12 @@ void UVolumeDataComponent::LoadRAWVolume() {
     auto volume = keepVolumeInCPU ? VolumeData::LoadFromFile({.VoxTy = ImportVoxelType,
                                                               .Axis = ImportVolumeTransformedAxis,
                                                               .Dimension = ImportVolumeDimension,
-                                                              .FilePath = files[0]},
+                                                              .FilePath = {files[0]}},
                                                              std::reference_wrapper(volumeCPUData))
                                   : VolumeData::LoadFromFile({.VoxTy = ImportVoxelType,
                                                               .Axis = ImportVolumeTransformedAxis,
                                                               .Dimension = ImportVolumeDimension,
-                                                              .FilePath = files[0]});
+                                                              .FilePath = {files[0]}});
     if (volume.IsType<FString>()) {
         auto &errMsg = volume.Get<FString>();
         processError(errMsg);
@@ -117,7 +117,7 @@ void UVolumeDataComponent::LoadTF() {
     if (files.IsEmpty())
         return;
 
-    auto tf = TransferFunctionData::LoadFromFile({.FilePath = files[0]});
+    auto tf = TransferFunctionData::LoadFromFile({.FilePath = {files[0]}});
     if (tf.IsType<FString>()) {
         auto &errMsg = tf.Get<FString>();
         processError(errMsg);
@@ -231,7 +231,6 @@ void UVolumeDataComponent::generateSmoothedVolume() {
                  VolumeTexture->GetSizeX(), VolumeTexture->GetSizeY(), VolumeTexture->GetSizeZ(),
                  EPixelFormat::PF_R32_FLOAT);
              VolumeTextureSmoothed->Filter = TextureFilter::TF_Trilinear;
-             VolumeTextureSmoothed->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
              VolumeTextureSmoothed->AddressMode = TextureAddress::TA_Clamp;
 
              auto texDat = VolumeTextureSmoothed->GetPlatformData()->Mips[0].BulkData.Lock(

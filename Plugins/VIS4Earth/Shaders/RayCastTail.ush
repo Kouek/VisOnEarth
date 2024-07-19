@@ -1,5 +1,0 @@
-    }
-    //GammaCorrect(rgb);
-
-    float4 prevCol = ColorOutput[dispatchThreadID.xy];
-    ColorOutput[dispatchThreadID.xy].rgb = (1.f - a) * prevCol.rgb + a * rgb;

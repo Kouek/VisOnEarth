@@ -5,7 +5,6 @@
 #include "Components/SceneComponent.h"
 #include "Components/WidgetComponent.h"
 #include "CoreMinimal.h"
-#include "Engine/StaticMesh.h"
 
 #include "CesiumGeoreference.h"
 
@@ -29,9 +28,14 @@ class VIS4EARTH_API UGeoComponent : public USceneComponent {
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
     TWeakObjectPtr<ACesiumGeoreference> GeoRef;
 
-    UFUNCTION(BlueprintCallable, Category = "VIS4Earth")
-    UStaticMesh *GenerateGeoMesh(int32 LongtitudeTessellation = 10,
-                                 int32 LatitudeTessellation = 10);
+    struct GeoMesh {
+        TArray<FVector> Positions;
+        TArray<FVector2D> TexCoordXYs;
+        TArray<FVector2D> TexCoordZs;
+        TArray<int32> Indices;
+    };
+    TOptional<GeoMesh> GenerateGeoMesh(int32 LongtitudeTessellation = 10,
+                                       int32 LatitudeTessellation = 10);
 
     UUserWidget *GetUI() const { return ui.Get(); }
 
@@ -79,7 +83,7 @@ class VIS4EARTH_API UGeoComponent : public USceneComponent {
 
     static void processError(const FString &ErrMsg);
 
-#ifdef WITH_EDITOR
+#if WITH_EDITOR
   public:
     virtual void PostEditChangeProperty(struct FPropertyChangedEvent &PropChngedEv) override {
         Super::PostEditChangeProperty(PropChngedEv);

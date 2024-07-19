@@ -56,39 +56,26 @@ void UGeoComponent::processError(const FString &ErrMsg) {
     notifyItem->ExpireAndFadeout();
 }
 
-UStaticMesh *UGeoComponent::GenerateGeoMesh(int32 LongtitudeTessellation,
-                                            int32 LatitudeTessellation) {
+TOptional<UGeoComponent::GeoMesh> UGeoComponent::GenerateGeoMesh(int32 LongtitudeTessellation,
+                                                                 int32 LatitudeTessellation) {
     if (!GeoRef.IsValid()) {
         processError(TEXT("GeoRef is NOT set."));
-        return nullptr;
+        return {};
     }
 
     if (LongtitudeTessellation < 0 || LatitudeTessellation < 0) {
         processError(FString::Format(
             TEXT("LongtitudeTessellation {0} or LatitudeTessellation {1} is invalid."),
             {LongtitudeTessellation, LatitudeTessellation}));
-        return nullptr;
+        return {};
     }
 
-    auto *mesh = NewObject<UStaticMesh>();
-    mesh->GetStaticMaterials().Add(FStaticMaterial());
+    GeoMesh result;
+    auto &positions = result.Positions;
+    auto &texCoordXYs = result.TexCoordXYs;
+    auto &texCoordZs = result.TexCoordZs;
+    auto &indices = result.Indices;
 
-    FMeshDescription meshDesc;
-
-    FStaticMeshAttributes meshAttrs(meshDesc);
-    meshAttrs.Register();
-
-    FMeshDescriptionBuilder meshDescBuilder;
-    meshDescBuilder.SetMeshDescription(&meshDesc);
-    meshDescBuilder.EnablePolyGroups();
-    meshDescBuilder.SetNumUVLayers(2);
-
-    struct VertexAttr {
-        FVertexID ID;
-        FVector Normal;
-        FVector TexCoord;
-    };
-    TArray<VertexAttr> vertices;
     int btmSurfVertStart;
     {
         auto lonExt = LongtitudeRange[1] - LongtitudeRange[0];
@@ -100,41 +87,31 @@ UStaticMesh *UGeoComponent::GenerateGeoMesh(int32 LongtitudeTessellation,
             auto h = top ? HeightRange[1] : HeightRange[0];
             for (int latIdx = 0; latIdx < LatitudeTessellation; ++latIdx)
                 for (int lonIdx = 0; lonIdx < LongtitudeTessellation; ++lonIdx) {
-                    vertices.Emplace();
-                    vertices.Last().TexCoord.X = 1. * lonIdx / (LongtitudeTessellation - 1);
-                    vertices.Last().TexCoord.Y = top ? 1. : 0.;
-                    vertices.Last().TexCoord.Z = 1. * latIdx / (LatitudeTessellation - 1);
+                    texCoordXYs.Emplace();
+                    texCoordXYs.Last().X = 1. * lonIdx / (LongtitudeTessellation - 1);
+                    texCoordXYs.Last().Y = top ? 1. : 0.;
+                    texCoordZs.Emplace();
+                    texCoordZs.Last().X = 1. * latIdx / (LatitudeTessellation - 1);
+                    texCoordZs.Last().Y = 0.;
 
-                    auto lon = LongtitudeRange[0] + vertices.Last().TexCoord.X * lonExt;
-                    auto lat = LatitudeRange[0] + vertices.Last().TexCoord.Z * latExt;
-                    vertices.Last().TexCoord.Z = 1.f - vertices.Last().TexCoord.Z;
+                    auto lon = LongtitudeRange[0] + texCoordXYs.Last().X * lonExt;
+                    auto lat = LatitudeRange[0] + texCoordZs.Last().X * latExt;
+                    texCoordZs.Last().X = 1.f - texCoordZs.Last().X;
 
-                    auto tmp =
-                        GeoRef->TransformLongitudeLatitudeHeightPositionToUnreal({lon, lat, h});
-                    vertices.Last().ID = meshDescBuilder.AppendVertex(tmp);
-
-                    tmp.Normalize();
-                    vertices.Last().Normal = top ? tmp : -tmp;
+                    positions.Emplace(
+                        GeoRef->TransformLongitudeLatitudeHeightPositionToUnreal({lon, lat, h}));
                 }
         };
         genSurfVertices(true);
-        btmSurfVertStart = vertices.Num();
+        btmSurfVertStart = positions.Num();
         genSurfVertices(false);
     }
 
     {
-        auto polyGrpID = meshDescBuilder.AppendPolygonGroup();
         auto addTri = [&](std::array<int, 3> triIndices) {
-            std::array<FVertexInstanceID, 3> instIDs;
-            for (uint8 i = 0; i < 3; ++i) {
-                auto vert = vertices[triIndices[i]];
-                instIDs[i] = meshDescBuilder.AppendInstance(vert.ID);
-                meshDescBuilder.SetInstanceNormal(instIDs[i], vert.Normal);
-                meshDescBuilder.SetInstanceUV(instIDs[i],
-                                              FVector2D(vert.TexCoord.X, vert.TexCoord.Y), 0);
-                meshDescBuilder.SetInstanceUV(instIDs[i], FVector2D(vert.TexCoord.Z, 0.), 1);
-            }
-            meshDescBuilder.AppendTriangle(instIDs[0], instIDs[1], instIDs[2], polyGrpID);
+            indices.Emplace(triIndices[0]);
+            indices.Emplace(triIndices[1]);
+            indices.Emplace(triIndices[2]);
         };
         auto addTopBotSurf = [&](bool top, int latIdx, int lonIdx) {
             auto start = top ? 0 : btmSurfVertStart;
@@ -172,15 +149,7 @@ UStaticMesh *UGeoComponent::GenerateGeoMesh(int32 LongtitudeTessellation,
         }
     }
 
-    UStaticMesh::FBuildMeshDescriptionsParams buildMesDescParams;
-    buildMesDescParams.bFastBuild = true;
-
-    TArray<const FMeshDescription *> meshDescs;
-    meshDescs.Emplace(&meshDesc);
-
-    mesh->BuildFromMeshDescriptions(meshDescs, buildMesDescParams);
-
-    return mesh;
+    return result;
 }
 
 struct GeoComponentNamesInUI {

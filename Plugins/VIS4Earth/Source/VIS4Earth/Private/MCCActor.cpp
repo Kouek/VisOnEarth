@@ -1,12 +1,9 @@
-#include "MCCActor.h"
+﻿#include "MCCActor.h"
 
 #include "Components/CheckBox.h"
 #include "Components/ComboBoxString.h"
 #include "Components/EditableText.h"
 #include "Components/NamedSlot.h"
-#include "MeshDescription.h"
-#include "MeshDescriptionBuilder.h"
-#include "StaticMeshAttributes.h"
 
 #include "MCCTable.h"
 
@@ -23,6 +20,8 @@ void AMCCActor::OnComboBoxString_MeshSmoothTypeSelectionChanged(FString Selected
 }
 
 AMCCActor::AMCCActor() {
+    MeshComponent = CreateDefaultSubobject<UProceduralMeshComponent>(TEXT("StaticMesh"));
+
     GeoComponent = CreateDefaultSubobject<UGeoComponent>(TEXT("Geographics"));
     RootComponent = GeoComponent;
 
@@ -33,16 +32,11 @@ AMCCActor::AMCCActor() {
     UIComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("UI"));
     UIComponent->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepRelativeTransform);
 
-    material = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr,
-                                                TEXT("Material'/VIS4Earth/M_MCC.M_MCC'")));
-
-    marchingCube();
     setupSignalsSlots();
 }
 
 void AMCCActor::BeginPlay() {
     Super::BeginPlay();
-    SetMobility(EComponentMobility::Stationary);
 
     {
         auto realUIClass =
@@ -78,24 +72,16 @@ void AMCCActor::BeginPlay() {
         VIS4EARTH_UI_ADD_SLOT(AMCCActor, this, ui, CheckBox, UseSmoothedVolume, CheckStateChanged);
         VIS4EARTH_UI_ADD_SLOT(AMCCActor, this, ui, ComboBoxString, MeshSmoothType,
                               SelectionChanged);
-        VIS4EARTH_UI_ADD_SLOT(AMCCActor, this, ui, EditableText, HeightRangeMin, TextChanged);
-        VIS4EARTH_UI_ADD_SLOT(AMCCActor, this, ui, EditableText, HeightRangeMax, TextChanged);
-        VIS4EARTH_UI_ADD_SLOT(AMCCActor, this, ui, EditableText, IsoValue, TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(AMCCActor, this, ui, EditableText, HeightRangeMin, TextCommitted);
+        VIS4EARTH_UI_ADD_SLOT(AMCCActor, this, ui, EditableText, HeightRangeMax, TextCommitted);
+        VIS4EARTH_UI_ADD_SLOT(AMCCActor, this, ui, EditableText, IsoValue, TextCommitted);
     }
 }
 
 void AMCCActor::setupSignalsSlots() {
     GeoComponent->OnGeographicsChanged.AddLambda([this](UGeoComponent *) { marchingCube(); });
-    VolumeComponent->OnTransferFunctionDataChanged.AddLambda([this](UVolumeDataComponent *) {
-        if (!GetStaticMeshComponent()->GetMaterial(0))
-            return;
-
-        auto dynamicMatr = Cast<UMaterialInstanceDynamic>(GetStaticMeshComponent()->GetMaterial(0));
-        dynamicMatr->SetTextureParameterValue(
-            TEXT("TF"), VolumeComponent->TransferFunctionTexture
-                            ? VolumeComponent->TransferFunctionTexture
-                            : VolumeComponent->DefaultTransferFunctionTexture);
-    });
+    VolumeComponent->OnTransferFunctionDataChanged.AddLambda(
+        [this](UVolumeDataComponent *) { updateMaterialInstanceDynamic(); });
     VolumeComponent->OnVolumeDataChanged.AddLambda(
         [this](UVolumeDataComponent *) { marchingCube(); });
 }
@@ -135,15 +121,6 @@ void AMCCActor::marchingCube() {
         return;
     }
 
-    FMeshDescription meshDesc;
-
-    FStaticMeshAttributes meshAttrs(meshDesc);
-    meshAttrs.Register();
-
-    FMeshDescriptionBuilder meshDescBuilder;
-    meshDescBuilder.SetMeshDescription(&meshDesc);
-    meshDescBuilder.EnablePolyGroups();
-
     edges.clear();
     auto gen = [&]<SupportedVoxelType T>(T) {
         FIntVector3 voxPerVol(VolumeComponent->VolumeTexture->GetSizeX(),
@@ -163,8 +140,11 @@ void AMCCActor::marchingCube() {
         };
         std::array<std::unordered_map<FIntVector3, FVertexID, decltype(hashEdge)>, 2> edge2vertIDs;
 
+        positions.Empty();
+        normals.Empty();
+        uvs.Empty();
         indices.Empty();
-        vertAttrs.clear();
+
         edges.clear();
         FIntVector3 startPos;
         for (startPos.Z = HeightRange[0]; startPos.Z < HeightRange[1]; ++startPos.Z) {
@@ -293,10 +273,10 @@ void AMCCActor::marchingCube() {
                             }();
                             scalar = (scalar - vxMin) / vxExt; // [vxMin, vxMax] -> [0, 1]
 
-                            auto id = meshDescBuilder.AppendVertex(pos);
+                            auto id = positions.Emplace(pos);
+                            normals.Emplace(FVector::Zero());
+                            uvs.Emplace(scalar, 0.f);
                             indices.Emplace(id);
-                            vertAttrs.emplace(std::piecewise_construct, std::forward_as_tuple(id),
-                                              std::forward_as_tuple(pos, scalar));
                             edge2vertIDs[edge2vertIDIdx].emplace(edgeID, indices.Last());
                         }
 
@@ -304,18 +284,16 @@ void AMCCActor::marchingCube() {
                                                                indices[indices.Num() - 2],
                                                                indices[indices.Num() - 1]};
                         auto norm = [&]() {
-                            auto e0 = vertAttrs.at(triVertIDs[1]).Position -
-                                      vertAttrs.at(triVertIDs[0]).Position;
-                            auto e1 = vertAttrs.at(triVertIDs[2]).Position -
-                                      vertAttrs.at(triVertIDs[0]).Position;
-                            auto norm = FVector::CrossProduct(e1, e0);
+                            auto e0 = positions[triVertIDs[1]] - positions[triVertIDs[0]];
+                            auto e1 = positions[triVertIDs[2]] - positions[triVertIDs[0]];
+                            auto norm = FVector::CrossProduct(e0, e1);
                             norm.Normalize();
 
                             return norm;
                         }();
-                        vertAttrs.at(triVertIDs[0]).Normal += norm;
-                        vertAttrs.at(triVertIDs[1]).Normal += norm;
-                        vertAttrs.at(triVertIDs[2]).Normal += norm;
+                        normals[triVertIDs[0]] += norm;
+                        normals[triVertIDs[1]] += norm;
+                        normals[triVertIDs[2]] += norm;
 
                         edges.emplace(triVertIDs[0], triVertIDs[1]);
                         edges.emplace(triVertIDs[1], triVertIDs[0]);
@@ -327,8 +305,11 @@ void AMCCActor::marchingCube() {
                 }
         }
 
-        for (auto &[_, vertAttr] : vertAttrs)
-            vertAttr.Normal.Normalize();
+        for (auto &normal : normals)
+            normal.Normalize();
+        for (int32 i = 0; i < indices.Num(); i += 3)
+            // From CCW to CW
+            std::swap(indices[i + 1], indices[i + 2]);
     };
 
     switch (VolumeComponent->GetVolumeVoxelType()) {
@@ -341,113 +322,107 @@ void AMCCActor::marchingCube() {
         return;
     }
 
-    {
-        auto polyGrpID = meshDescBuilder.AppendPolygonGroup();
-        for (int32 i = 0; i < indices.Num(); i += 3) {
-            std::array<FVertexInstanceID, 3> instIDs;
-            for (int32 ii = 0; ii < 3; ++ii) {
-                auto vertID = indices[i + ii];
-                instIDs[ii] = meshDescBuilder.AppendInstance(vertID);
+    MeshComponent->CreateMeshSection(static_cast<int>(EMeshSectionIndex::Normal), positions,
+                                     indices, normals, uvs, TArray<FColor>(),
+                                     TArray<FProcMeshTangent>(), false);
 
-                const auto &vertAttr = vertAttrs.at(vertID);
-                meshDescBuilder.SetInstanceNormal(instIDs[ii], vertAttr.Normal);
-                meshDescBuilder.SetInstanceUV(instIDs[ii], FVector2D(vertAttr.Scalar, 0.f));
-            }
-            meshDescBuilder.AppendTriangle(instIDs[0], instIDs[1], instIDs[2], polyGrpID);
-        }
-    }
-
-    UStaticMesh::FBuildMeshDescriptionsParams buildMesDescParams;
-    buildMesDescParams.bFastBuild = true;
-
-    TArray<const FMeshDescription *> meshDescs;
-    meshDescs.Emplace(&meshDesc);
-
-    mesh = NewObject<UStaticMesh>();
-    mesh->BuildFromMeshDescriptions(meshDescs, buildMesDescParams);
-
-    auto dynamicMatr = GetStaticMeshComponent()->CreateDynamicMaterialInstance(0, material.Get());
-    dynamicMatr->SetTextureParameterValue(TEXT("TF"),
-                                          VolumeComponent->TransferFunctionTexture
-                                              ? VolumeComponent->TransferFunctionTexture
-                                              : VolumeComponent->DefaultTransferFunctionTexture);
-
-    generateSmoothedMesh();
+    generateSmoothedMeshThenUpdateMesh();
 }
 
-void AMCCActor::emptyMesh() {
-    GetStaticMeshComponent()->SetStaticMesh(nullptr);
-    mesh = meshSmoothed = nullptr;
-}
+void AMCCActor::emptyMesh() { MeshComponent->ClearAllMeshSections(); }
 
 void AMCCActor::updateMesh() {
+    if (MeshComponent->GetNumSections() == 0)
+        return;
+
+    auto setSectionVisibility = [&](EMeshSectionIndex idx, bool visibility) {
+        auto *section = MeshComponent->GetProcMeshSection(static_cast<int>(idx));
+        if (section)
+            section->bSectionVisible = visibility;
+    };
+
     switch (MeshSmoothType) {
-    case EMCCMeshSmoothType::None:
-        GetStaticMeshComponent()->SetStaticMesh(mesh);
-        break;
+    case EMCCMeshSmoothType::None: {
+        setSectionVisibility(EMeshSectionIndex::Normal, true);
+        setSectionVisibility(EMeshSectionIndex::Smoothed, false);
+    } break;
     default:
-        GetStaticMeshComponent()->SetStaticMesh(meshSmoothed);
+        setSectionVisibility(EMeshSectionIndex::Normal, false);
+        setSectionVisibility(EMeshSectionIndex::Smoothed, true);
+    }
+
+    updateMaterialInstanceDynamic();
+}
+
+void AMCCActor::updateMaterialInstanceDynamic() {
+    if (!MaterialInstanceDynamic) {
+        auto material = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr,
+                                                         TEXT("Material'/VIS4Earth/M_MCC.M_MCC'")));
+        MaterialInstanceDynamic = MeshComponent->CreateDynamicMaterialInstance(0, material);
+    }
+
+    if (MaterialInstanceDynamic) {
+        MaterialInstanceDynamic->SetTextureParameterValue(
+            TEXT("TF"), VolumeComponent->TransferFunctionTexture
+                            ? VolumeComponent->TransferFunctionTexture
+                            : VolumeComponent->DefaultTransferFunctionTexture);
+        MeshComponent->SetMaterial(0, MaterialInstanceDynamic);
+        MeshComponent->SetMaterial(1, MaterialInstanceDynamic);
+    } else {
+        UE_LOG(LogStats, Error, TEXT("AMCCActor lost MaterialInstanceDynamic."));
     }
 }
 
-void AMCCActor::generateSmoothedMesh(bool ShouldReGen) {
+void AMCCActor::generateSmoothedMeshThenUpdateMesh(bool ShouldReGen) {
     if (MeshSmoothType == EMCCMeshSmoothType::None ||
         (prevMeshSmoothType == MeshSmoothType && !ShouldReGen)) {
         updateMesh();
         return;
     }
 
-    FMeshDescription meshDesc;
-
-    FStaticMeshAttributes meshAttrs(meshDesc);
-    meshAttrs.Register();
-
-    FMeshDescriptionBuilder meshDescBuilder;
-    meshDescBuilder.SetMeshDescription(&meshDesc);
-    meshDescBuilder.EnablePolyGroups();
-
-    meshDescBuilder.ReserveNewVertices(vertAttrs.size());
-
     auto laplacian = [&]() {
-        for (auto &[vertID, vertAttr] : vertAttrs) {
+        positionsSmoothed = positions;
+        normalsSmoothed = normals;
+
+        for (int32 vertID = 0; vertID < positions.Num(); ++vertID) {
             auto itr = edges.lower_bound(Edge{vertID, 0});
 
+            auto &positionSmoothed = positionsSmoothed[vertID];
+            auto &normalSmoothed = normalsSmoothed[vertID];
             int32 adjNum = 1;
-            vertAttr.PositionSmoothed = vertAttr.Position;
-            vertAttr.NormalSmoothed = vertAttr.Normal;
             while (itr != edges.end() && itr->VertIDs[0] == vertID) {
-                const auto &adjVertAttr = vertAttrs.at(itr->VertIDs[1]);
-                vertAttr.PositionSmoothed += adjVertAttr.Position;
-                vertAttr.NormalSmoothed += adjVertAttr.Normal;
+                positionSmoothed += positions[itr->VertIDs[1]];
+                normalSmoothed += normals[itr->VertIDs[1]];
 
                 ++itr;
                 ++adjNum;
             }
-            vertAttr.PositionSmoothed /= adjNum;
-            vertAttr.NormalSmoothed.Normalize();
-
-            vertAttr.IDSmoothed = meshDescBuilder.AppendVertex(vertAttr.PositionSmoothed);
+            positionSmoothed /= adjNum;
+            normalSmoothed.Normalize();
         }
     };
     auto curvature = [&]() {
-        for (auto &[vertID, vertAttr] : vertAttrs) {
+        positionsSmoothed.SetNum(positions.Num());
+        normalsSmoothed.SetNum(positions.Num());
+
+        for (int32 vertID = 0; vertID < positions.Num(); ++vertID) {
             auto itr = edges.lower_bound(Edge{vertID, 0});
 
+            const auto &position = positions[vertID];
+            const auto &normal = normals[vertID];
+            auto &positionSmoothed = positionsSmoothed[vertID];
+            auto &normalSmoothed = normalsSmoothed[vertID];
             auto projLen = 0.;
             int32 adjNum = 1;
             while (itr != edges.end() && itr->VertIDs[0] == vertID) {
-                const auto &adjVertAttr = vertAttrs.at(itr->VertIDs[1]);
-                projLen +=
-                    FVector::DotProduct(adjVertAttr.Position - vertAttr.Position, vertAttr.Normal);
+                projLen += FVector::DotProduct(positions[itr->VertIDs[1]] - position, normal);
 
                 ++itr;
                 ++adjNum;
             }
             projLen /= adjNum;
-            vertAttr.PositionSmoothed = vertAttr.Position + projLen * vertAttr.Normal;
-            vertAttr.NormalSmoothed = vertAttr.Normal;
-
-            vertAttr.IDSmoothed = meshDescBuilder.AppendVertex(vertAttr.PositionSmoothed);
+            positionSmoothed = position + projLen * normal;
+            normalSmoothed = normal;
         }
     };
 
@@ -460,29 +435,9 @@ void AMCCActor::generateSmoothedMesh(bool ShouldReGen) {
         break;
     }
 
-    {
-        auto polyGrpID = meshDescBuilder.AppendPolygonGroup();
-        for (int32 i = 0; i < indices.Num(); i += 3) {
-            std::array<FVertexInstanceID, 3> instIDs;
-            for (int32 ii = 0; ii < 3; ++ii) {
-                const auto &vertAttr = vertAttrs.at(indices[i + ii]);
-                instIDs[ii] = meshDescBuilder.AppendInstance(vertAttr.IDSmoothed);
-
-                meshDescBuilder.SetInstanceNormal(instIDs[ii], vertAttr.NormalSmoothed);
-                meshDescBuilder.SetInstanceUV(instIDs[ii], FVector2D(vertAttr.Scalar, 0.f));
-            }
-            meshDescBuilder.AppendTriangle(instIDs[0], instIDs[1], instIDs[2], polyGrpID);
-        }
-    }
-
-    UStaticMesh::FBuildMeshDescriptionsParams buildMesDescParams;
-    buildMesDescParams.bFastBuild = true;
-
-    TArray<const FMeshDescription *> meshDescs;
-    meshDescs.Emplace(&meshDesc);
-
-    meshSmoothed = NewObject<UStaticMesh>();
-    meshSmoothed->BuildFromMeshDescriptions(meshDescs, buildMesDescParams);
+    MeshComponent->CreateMeshSection(static_cast<int>(EMeshSectionIndex::Smoothed), positions,
+                                     indices, normals, uvs, TArray<FColor>(),
+                                     TArray<FProcMeshTangent>(), false);
 
     updateMesh();
     prevMeshSmoothType = MeshSmoothType;

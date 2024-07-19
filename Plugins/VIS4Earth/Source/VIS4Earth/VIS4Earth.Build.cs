@@ -33,7 +33,8 @@ public class VIS4Earth : ModuleRules
                 "MeshDescription",
                 "StaticMeshDescription",
                 "MeshConversion",
-                "CesiumRuntime"
+                "CesiumRuntime",
+                "ProceduralMeshComponent"
             }
             );
 

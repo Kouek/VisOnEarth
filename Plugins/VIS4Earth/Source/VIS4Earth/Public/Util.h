@@ -1,6 +1,8 @@
-// Author: Kouek Kou
+﻿// Author: Kouek Kou
 
 #pragma once
+
+#include "CoreMinimal.h"
 
 #define VIS4EARTH_COMMA ,
 
@@ -26,3 +28,17 @@
         auto wdgt = Cast<U##WdgtTy>(UI->GetWidgetFromName(TEXT(#WdgtTy) TEXT("_") TEXT(#Wdgt)));   \
         wdgt->On##Signal.AddDynamic(Obj, &ObjTy::On##WdgtTy##_##Wdgt##Signal);                     \
     }
+
+namespace VIS4Earth {
+
+inline FString GetNameInFunction(const char *Name, const char *FuncName) {
+    FString ret;
+    ret += Name;
+    ret += " in ";
+    ret += FuncName;
+    return ret;
+}
+
+} // namespace VIS4Earth
+
+#define VIS4EARTH_GET_NAME_IN_FUNCTION(Name) VIS4Earth::GetNameInFunction(Name, __FUNCTION__)

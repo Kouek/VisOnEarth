@@ -80,7 +80,6 @@ VolumeData::LoadFromFile(const LoadFromFileDesc &Desc,
 
         auto tex = UVolumeTexture::CreateTransient(trDim.X, trDim.Y, trDim.Z, pixFmt, Desc.Name);
         tex->Filter = TextureFilter::TF_Trilinear;
-        tex->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
         tex->AddressMode = TextureAddress::TA_Clamp;
 
         auto *texDat =
@@ -179,7 +178,6 @@ VolumeData::SmoothFromFlatArray(const SmoothFromFlatArrayDesc &Desc,
             UVolumeTexture::CreateTransient(Desc.Dimension.X, Desc.Dimension.Y, Desc.Dimension.Z,
                                             GetVoxelPixelFormat(Desc.VoxTy), Desc.Name);
         tex->Filter = TextureFilter::TF_Trilinear;
-        tex->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
         tex->AddressMode = TextureAddress::TA_Clamp;
 
         auto *texDat =
@@ -289,7 +287,6 @@ UTexture2D *TransferFunctionData::FromFlatArrayToTexture(const TArray<FFloat16> 
     auto tex = UTexture2D::CreateTransient(Resolution, 1, PF_FloatRGBA, Name);
 
     tex->Filter = TextureFilter::TF_Bilinear;
-    tex->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
     tex->AddressX = tex->AddressY = TextureAddress::TA_Clamp;
     FromFlatArrayToTexture(tex, Dat);
 

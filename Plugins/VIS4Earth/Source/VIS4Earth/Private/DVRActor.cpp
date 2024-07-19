@@ -55,9 +55,9 @@ void ADVRActor::BeginPlay() {
             ->SetContent(GeoComponent->GetUI());
 
         VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, CheckBox, UsePreIntegratedTF, CheckStateChanged);
-        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, EditableText, MaxStepCount, TextChanged);
-        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, EditableText, Step, TextChanged);
-        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, EditableText, RelativeLightness, TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, EditableText, MaxStepCount, TextCommitted);
+        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, EditableText, Step, TextCommitted);
+        VIS4EARTH_UI_ADD_SLOT(ADVRActor, this, ui, EditableText, RelativeLightness, TextCommitted);
     }
 }
 
@@ -83,6 +83,7 @@ void ADVRActor::setupRenderer() {
                                          .GeoRef = GeoComponent->GeoRef.Get()});
     renderer->SetRenderParameters(
         {.UsePreIntegratedTF = UsePreIntegratedTF,
+         .Tessellation = FIntVector2(LongtitudeTessellation, LatitudeTessellation),
          .MaxStepCount = MaxStepCount,
          .Step = Step,
          .RelativeLightness = RelativeLightness,
@@ -119,7 +120,6 @@ void ADVRActor::generatePreIntegratedTF() {
     PreIntegratedTF = UTexture2D::CreateTransient(TransferFunctionData::Resolution,
                                                   TransferFunctionData::Resolution, PF_FloatRGBA);
     PreIntegratedTF->Filter = TextureFilter::TF_Bilinear;
-    PreIntegratedTF->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
     PreIntegratedTF->AddressX = PreIntegratedTF->AddressY = TextureAddress::TA_Clamp;
 
     auto texDat = PreIntegratedTF->GetPlatformData()->Mips[0].BulkData.Lock(

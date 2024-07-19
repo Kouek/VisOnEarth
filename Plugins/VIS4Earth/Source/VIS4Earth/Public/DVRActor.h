@@ -31,6 +31,10 @@ class VIS4EARTH_API ADVRActor : public AActor {
     float Step = FDVRRenderer::RenderParameters::DefStep;
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
     float RelativeLightness = FDVRRenderer::RenderParameters::DefRelativeLightness;
+    UPROPERTY(EditAnywhere, Category = "VIS4Earth")
+    int LongtitudeTessellation = FDVRRenderer::RenderParameters::DefTessellation.X;
+    UPROPERTY(EditAnywhere, Category = "VIS4Earth")
+    int LatitudeTessellation = FDVRRenderer::RenderParameters::DefTessellation.Y;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UGeoComponent> GeoComponent;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
@@ -46,17 +50,17 @@ class VIS4EARTH_API ADVRActor : public AActor {
         generatePreIntegratedTF();
     }
     UFUNCTION()
-    void OnEditableText_MaxStepCountTextChanged(const FText &Text) {
+    void OnEditableText_MaxStepCountTextCommitted(const FText &Text, ETextCommit::Type Type) {
         MaxStepCount = FCString::Atoi(*Text.ToString());
         setupRenderer();
     }
     UFUNCTION()
-    void OnEditableText_StepTextChanged(const FText &Text) {
+    void OnEditableText_StepTextCommitted(const FText &Text, ETextCommit::Type Type) {
         Step = FCString::Atof(*Text.ToString());
         setupRenderer();
     }
     UFUNCTION()
-    void OnEditableText_RelativeLightnessTextChanged(const FText &Text) {
+    void OnEditableText_RelativeLightnessTextCommitted(const FText &Text, ETextCommit::Type Type) {
         RelativeLightness = FCString::Atof(*Text.ToString());
         setupRenderer();
     }
@@ -88,7 +92,7 @@ class VIS4EARTH_API ADVRActor : public AActor {
     void destroyRenderer();
     void generatePreIntegratedTF();
 
-#ifdef WITH_EDITOR
+#if WITH_EDITOR
   public:
     virtual void PostEditChangeProperty(struct FPropertyChangedEvent &PropChngedEv) override {
         Super::PostEditChangeProperty(PropChngedEv);
@@ -99,7 +103,9 @@ class VIS4EARTH_API ADVRActor : public AActor {
         auto name = PropChngedEv.MemberProperty->GetFName();
         if (name == GET_MEMBER_NAME_CHECKED(ADVRActor, MaxStepCount) ||
             name == GET_MEMBER_NAME_CHECKED(ADVRActor, Step) ||
-            name == GET_MEMBER_NAME_CHECKED(ADVRActor, RelativeLightness)) {
+            name == GET_MEMBER_NAME_CHECKED(ADVRActor, RelativeLightness) ||
+            name == GET_MEMBER_NAME_CHECKED(ADVRActor, LongtitudeTessellation) ||
+            name == GET_MEMBER_NAME_CHECKED(ADVRActor, LatitudeTessellation)) {
             setupRenderer();
             return;
         }

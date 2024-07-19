@@ -1,4 +1,4 @@
-// Author: Kouek Kou
+﻿// Author: Kouek Kou
 
 #pragma once
 
@@ -8,7 +8,8 @@
 
 #include "Components/WidgetComponent.h"
 #include "CoreMinimal.h"
-#include "Engine/StaticMeshActor.h"
+#include "GameFramework/Actor.h"
+#include "ProceduralMeshComponent.h"
 
 #include "GeoComponent.h"
 #include "VolumeDataComponent.h"
@@ -25,10 +26,10 @@ enum class EMCCMeshSmoothType : uint8 {
 /*
  * Class: AMCCActor
  * Function:
- * -- Implements Marching Cube Isosurface Generatiion and Rendering.
+ * -- Implements Marching Cube Isosurface Generation and Rendering.
  */
 UCLASS()
-class VIS4EARTH_API AMCCActor : public AStaticMeshActor {
+class VIS4EARTH_API AMCCActor : public AActor {
     GENERATED_BODY()
 
   public:
@@ -42,6 +43,11 @@ class VIS4EARTH_API AMCCActor : public AStaticMeshActor {
     FIntVector2 HeightRange = {0, 0};
     UPROPERTY(EditAnywhere, Category = "VIS4Earth")
     float IsoValue = 0.f;
+
+    UPROPERTY(VisibleAnywhere, Transient, Category = "VIS4Earth")
+    TObjectPtr<UMaterialInstanceDynamic> MaterialInstanceDynamic;
+    UPROPERTY(VisibleAnywhere, Transient, Category = "VIS4Earth")
+    TObjectPtr<UProceduralMeshComponent> MeshComponent;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
     TObjectPtr<UGeoComponent> GeoComponent;
     UPROPERTY(VisibleAnywhere, Category = "VIS4Earth")
@@ -63,52 +69,47 @@ class VIS4EARTH_API AMCCActor : public AStaticMeshActor {
     void OnComboBoxString_MeshSmoothTypeSelectionChanged(FString SelectedItem,
                                                          ESelectInfo::Type SelectionType);
     UFUNCTION()
-    void OnEditableText_HeightRangeMinTextChanged(const FText &Text) {
+    void OnEditableText_HeightRangeMinTextCommitted(const FText &Text, ETextCommit::Type Type) {
         HeightRange[0] = FCString::Atoi(*Text.ToString());
         marchingCube();
     }
     UFUNCTION()
-    void OnEditableText_HeightRangeMaxTextChanged(const FText &Text) {
+    void OnEditableText_HeightRangeMaxTextCommitted(const FText &Text, ETextCommit::Type Type) {
         HeightRange[1] = FCString::Atoi(*Text.ToString());
         marchingCube();
     }
     UFUNCTION()
-    void OnEditableText_IsoValueTextChanged(const FText &Text) {
+    void OnEditableText_IsoValueTextCommitted(const FText &Text, ETextCommit::Type Type) {
         IsoValue = FCString::Atof(*Text.ToString());
         marchingCube();
     }
 
     AMCCActor();
 
+    virtual void PostLoad() override {
+        Super::PostLoad();
+
+        marchingCube();
+    }
+
   protected:
     virtual void BeginPlay() override;
 
   private:
+    enum class EMeshSectionIndex { Normal = 0, Smoothed = 1 };
+
     EMCCMeshSmoothType prevMeshSmoothType = EMCCMeshSmoothType::None;
 
-    TObjectPtr<UMaterial> material;
-    TObjectPtr<UStaticMesh> mesh;
-    TObjectPtr<UStaticMesh> meshSmoothed;
-
-    TArray<FVertexID> indices;
-    struct VertexAttr {
-        FVector Position;
-        FVector Normal = FVector::Zero();
-        FVector PositionSmoothed;
-        FVector NormalSmoothed;
-        double Scalar;
-        FVertexID IDSmoothed;
-
-        VertexAttr(const FVector &Pos, double Scalar) : Position(Pos), Scalar(Scalar) {}
-    };
-    struct HashFVertexID {
-        size_t operator()(FVertexID ID) const { return std::hash<int32>()(ID.GetValue()); }
-    };
-    std::unordered_map<FVertexID, VertexAttr, HashFVertexID> vertAttrs;
+    TArray<FVector> positions;
+    TArray<FVector> normals;
+    TArray<FVector> positionsSmoothed;
+    TArray<FVector> normalsSmoothed;
+    TArray<FVector2D> uvs;
+    TArray<int32> indices;
 
     struct Edge {
         std::array<int32, 2> VertIDs;
-        Edge(FVertexID V0, FVertexID V1) : VertIDs{V0, V1} {}
+        Edge(int32 V0, int32 V1) : VertIDs{V0, V1} {}
 
         struct Less {
             bool operator()(const Edge &E0, const Edge &E1) const {
@@ -121,12 +122,12 @@ class VIS4EARTH_API AMCCActor : public AStaticMeshActor {
     void setupSignalsSlots();
     void checkAndCorrectParameters();
     void marchingCube();
+    void updateMaterialInstanceDynamic();
     void emptyMesh();
     void updateMesh();
-    void generateSmoothedMesh(bool ShouldReGen = false);
+    void generateSmoothedMeshThenUpdateMesh(bool ShouldReGen = false);
 
-  private:
-#ifdef WITH_EDITOR
+#if WITH_EDITOR
   public:
     virtual void PostEditChangeProperty(struct FPropertyChangedEvent &PropChngedEv) override {
         Super::PostEditChangeProperty(PropChngedEv);
@@ -143,7 +144,7 @@ class VIS4EARTH_API AMCCActor : public AStaticMeshActor {
             return;
         }
         if (name == GET_MEMBER_NAME_CHECKED(AMCCActor, MeshSmoothType)) {
-            generateSmoothedMesh();
+            generateSmoothedMeshThenUpdateMesh();
             return;
         }
     }

@@ -67,9 +67,9 @@ void AMCSActor::BeginPlay() {
         VIS4EARTH_UI_ADD_SLOT(AMCSActor, this, ui, ComboBoxString, LineStyle, SelectionChanged);
         VIS4EARTH_UI_ADD_SLOT(AMCSActor, this, ui, CheckBox, UseLerp, CheckStateChanged);
         VIS4EARTH_UI_ADD_SLOT(AMCSActor, this, ui, CheckBox, UseSmoothedVolume, CheckStateChanged);
-        VIS4EARTH_UI_ADD_SLOT(AMCSActor, this, ui, EditableText, HeightRangeMin, TextChanged);
-        VIS4EARTH_UI_ADD_SLOT(AMCSActor, this, ui, EditableText, HeightRangeMax, TextChanged);
-        VIS4EARTH_UI_ADD_SLOT(AMCSActor, this, ui, EditableText, IsoValue, TextChanged);
+        VIS4EARTH_UI_ADD_SLOT(AMCSActor, this, ui, EditableText, HeightRangeMin, TextCommitted);
+        VIS4EARTH_UI_ADD_SLOT(AMCSActor, this, ui, EditableText, HeightRangeMax, TextCommitted);
+        VIS4EARTH_UI_ADD_SLOT(AMCSActor, this, ui, EditableText, IsoValue, TextCommitted);
     }
 }
 
