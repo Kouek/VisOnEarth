@@ -1,4 +1,4 @@
-// Author: Kouek Kou
+﻿// Author: Kouek Kou
 
 #pragma once
 
@@ -25,7 +25,7 @@ enum class EMCCMeshSmoothType : uint8 {
 /*
  * Class: AMCCActor
  * Function:
- * -- Implements Marching Cube Isosurface Generatiion and Rendering.
+ * -- Implements Marching Cube Isosurface Generation and Rendering.
  */
 UCLASS()
 class VIS4EARTH_API AMCCActor : public AStaticMeshActor {
@@ -86,7 +86,7 @@ class VIS4EARTH_API AMCCActor : public AStaticMeshActor {
   private:
     EMCCMeshSmoothType prevMeshSmoothType = EMCCMeshSmoothType::None;
 
-    TObjectPtr<UMaterial> material;
+    TObjectPtr<UMaterialInstanceDynamic> material;
     TObjectPtr<UStaticMesh> mesh;
     TObjectPtr<UStaticMesh> meshSmoothed;
 
@@ -125,8 +125,7 @@ class VIS4EARTH_API AMCCActor : public AStaticMeshActor {
     void updateMesh();
     void generateSmoothedMesh(bool ShouldReGen = false);
 
-  private:
-#ifdef WITH_EDITOR
+#if WITH_EDITOR
   public:
     virtual void PostEditChangeProperty(struct FPropertyChangedEvent &PropChngedEv) override {
         Super::PostEditChangeProperty(PropChngedEv);

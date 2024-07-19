@@ -79,7 +79,7 @@ class VIS4EARTH_API UGeoComponent : public USceneComponent {
 
     static void processError(const FString &ErrMsg);
 
-#ifdef WITH_EDITOR
+#if WITH_EDITOR
   public:
     virtual void PostEditChangeProperty(struct FPropertyChangedEvent &PropChngedEv) override {
         Super::PostEditChangeProperty(PropChngedEv);

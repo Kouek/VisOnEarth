@@ -88,7 +88,7 @@ class VIS4EARTH_API ADVRActor : public AActor {
     void destroyRenderer();
     void generatePreIntegratedTF();
 
-#ifdef WITH_EDITOR
+#if WITH_EDITOR
   public:
     virtual void PostEditChangeProperty(struct FPropertyChangedEvent &PropChngedEv) override {
         Super::PostEditChangeProperty(PropChngedEv);

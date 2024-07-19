@@ -1,4 +1,4 @@
-#include "MCSRenderer.h"
+﻿#include "MCSRenderer.h"
 
 #include <unordered_map>
 
@@ -102,7 +102,7 @@ void FMCSRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
 
         auto extrnlTexRDG = RegisterExternalTexture(
             grphBldr, rndrParams.TransferFunctionTexture->GetResource()->GetTexture2DRHI(),
-            TEXT("TF Texture") TEXT(" in ") TEXT(__FUNCTION__));
+            *VIS4EARTH_GET_NAME_IN_FUNCTION("TF Texture"));
         shaderParams->TFInput = grphBldr.CreateSRV(FRDGTextureSRVDesc(extrnlTexRDG));
 
         shaderParams->RenderTargets[0] =
@@ -319,8 +319,8 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
     vertNum = vertices.Num();
     auto bufSz = sizeof(VertexAttr) * vertNum;
     if (!vertexBuffer.IsValid() || vertexBuffer->GetSize() != bufSz) {
-        FRHIResourceCreateInfo info(TEXT("Marching Square Create Vertex Buffer") TEXT(" in ")
-                                        TEXT(__FUNCTION__));
+        FRHIResourceCreateInfo info(
+            *VIS4EARTH_GET_NAME_IN_FUNCTION("Marching Square Create Vertex Buffer"));
         vertexBuffer = RHICmdList.CreateVertexBuffer(bufSz, BUF_VertexBuffer | BUF_Static,
                                                      ERHIAccess::VertexOrIndexBuffer, info);
     }
@@ -331,8 +331,8 @@ void FMCSRenderer::marchingSquare(const MCSParameters &Params,
     primNum = indices.Num() / 2;
     bufSz = sizeof(uint32) * indices.Num();
     if (!indexBuffer.IsValid() || indexBuffer->GetSize() != bufSz) {
-        FRHIResourceCreateInfo info(TEXT("Marching Square Create Index Buffer") TEXT(" in ")
-                                        TEXT(__FUNCTION__));
+        FRHIResourceCreateInfo info(
+            *VIS4EARTH_GET_NAME_IN_FUNCTION("Marching Square Create Index Buffer"));
         indexBuffer =
             RHICmdList.CreateIndexBuffer(sizeof(uint32), bufSz, BUF_VertexBuffer | BUF_Static,
                                          ERHIAccess::VertexOrIndexBuffer, info);

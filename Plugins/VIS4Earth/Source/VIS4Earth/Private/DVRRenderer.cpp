@@ -1,4 +1,4 @@
-// Author : Kouek Kou
+﻿// Author : Kouek Kou
 
 #include "DVRRenderer.h"
 
@@ -168,11 +168,11 @@ void FDVRRenderer::render(FPostOpaqueRenderParameters &PostQpqRndrParams) {
 
         auto extrnlTexRDG = RegisterExternalTexture(
             grphBldr, rndrParams.VolumeTexture->GetResource()->GetTexture3DRHI(),
-            TEXT("Volume Texture") TEXT(" in ") TEXT(__FUNCTION__));
+            *VIS4EARTH_GET_NAME_IN_FUNCTION("Volume Texture"));
         shaderParams->VolInput = grphBldr.CreateSRV(FRDGTextureSRVDesc(extrnlTexRDG));
         extrnlTexRDG = RegisterExternalTexture(
             grphBldr, rndrParams.TransferFunctionTexture->GetResource()->GetTexture2DRHI(),
-            TEXT("TF Texture") TEXT(" in ") TEXT(__FUNCTION__));
+            *VIS4EARTH_GET_NAME_IN_FUNCTION("TF Texture"));
         shaderParams->TFInput = grphBldr.CreateSRV(FRDGTextureSRVDesc(extrnlTexRDG));
 
         shaderParams->DepthInput =

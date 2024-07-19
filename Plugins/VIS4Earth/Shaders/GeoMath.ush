@@ -36,12 +36,12 @@ float4 IntersectEarthShell(
     for (int i = 1; i >= 0; --i) {
         float Delta = c - heightToCntrRngEarthLong[i] * heightToCntrRngEarthLong[i];
         Delta = b * b - 4.f * a * Delta;
-        if (Delta < 0.f)
-            continue;
-                
-        Delta = sqrt(Delta);
-        t[0][validCnt++] = (-b - Delta) * .5f / a;
-        t[0][validCnt++] = (-b + Delta) * .5f / a;
+        if (Delta >= 0.f) {
+            validCnt += 2;
+            Delta = sqrt(Delta);
+        }
+        t[0][(1 - i) * 2 + 0] = (-b - Delta) * .5f / a;
+        t[0][(1 - i) * 2 + 1] = (-b + Delta) * .5f / a;
     }
     if (validCnt == 0)
         return t;

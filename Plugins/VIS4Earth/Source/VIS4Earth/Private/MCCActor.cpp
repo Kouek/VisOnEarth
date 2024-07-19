@@ -1,4 +1,4 @@
-#include "MCCActor.h"
+﻿#include "MCCActor.h"
 
 #include "Components/CheckBox.h"
 #include "Components/ComboBoxString.h"
@@ -33,8 +33,9 @@ AMCCActor::AMCCActor() {
     UIComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("UI"));
     UIComponent->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepRelativeTransform);
 
-    material = Cast<UMaterial>(StaticLoadObject(UMaterial::StaticClass(), nullptr,
-                                                TEXT("Material'/VIS4Earth/M_MCC.M_MCC'")));
+    auto materialStatic = Cast<UMaterial>(StaticLoadObject(
+        UMaterial::StaticClass(), nullptr, TEXT("Material'/VIS4Earth/M_MCC.M_MCC'")));
+    material = GetStaticMeshComponent()->CreateDynamicMaterialInstance(0, materialStatic);
 
     marchingCube();
     setupSignalsSlots();
@@ -308,7 +309,7 @@ void AMCCActor::marchingCube() {
                                       vertAttrs.at(triVertIDs[0]).Position;
                             auto e1 = vertAttrs.at(triVertIDs[2]).Position -
                                       vertAttrs.at(triVertIDs[0]).Position;
-                            auto norm = FVector::CrossProduct(e1, e0);
+                            auto norm = FVector::CrossProduct(e0, e1);
                             norm.Normalize();
 
                             return norm;
@@ -329,6 +330,9 @@ void AMCCActor::marchingCube() {
 
         for (auto &[_, vertAttr] : vertAttrs)
             vertAttr.Normal.Normalize();
+        for (int32 i = 0; i < indices.Num(); i += 3)
+            // From CCW to CW
+            std::swap(indices[i + 1], indices[i + 2]);
     };
 
     switch (VolumeComponent->GetVolumeVoxelType()) {
@@ -366,11 +370,10 @@ void AMCCActor::marchingCube() {
     mesh = NewObject<UStaticMesh>();
     mesh->BuildFromMeshDescriptions(meshDescs, buildMesDescParams);
 
-    auto dynamicMatr = GetStaticMeshComponent()->CreateDynamicMaterialInstance(0, material.Get());
-    dynamicMatr->SetTextureParameterValue(TEXT("TF"),
-                                          VolumeComponent->TransferFunctionTexture
-                                              ? VolumeComponent->TransferFunctionTexture
-                                              : VolumeComponent->DefaultTransferFunctionTexture);
+    material->SetTextureParameterValue(TEXT("TF"),
+                                       VolumeComponent->TransferFunctionTexture
+                                           ? VolumeComponent->TransferFunctionTexture
+                                           : VolumeComponent->DefaultTransferFunctionTexture);
 
     generateSmoothedMesh();
 }

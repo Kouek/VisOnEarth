@@ -1,4 +1,4 @@
-// Author: Kouek Kou
+﻿// Author: Kouek Kou
 
 #pragma once
 
@@ -15,7 +15,7 @@
 /*
  * Class: AMCSActor
  * Function:
- * -- Implements Marching Square Isopleth Generatiion and Rendering.
+ * -- Implements Marching Square Isopleth Generation and Rendering.
  */
 UCLASS()
 class VIS4EARTH_API AMCSActor : public AActor {
@@ -93,8 +93,7 @@ class VIS4EARTH_API AMCSActor : public AActor {
     void setupRenderer(bool shouldMarchSquare = false);
     void destroyRenderer();
 
-  private:
-#ifdef WITH_EDITOR
+#if WITH_EDITOR
   public:
     virtual void PostEditChangeProperty(struct FPropertyChangedEvent &PropChngedEv) override {
         Super::PostEditChangeProperty(PropChngedEv);

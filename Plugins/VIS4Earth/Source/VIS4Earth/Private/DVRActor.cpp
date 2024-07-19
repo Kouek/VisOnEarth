@@ -119,7 +119,6 @@ void ADVRActor::generatePreIntegratedTF() {
     PreIntegratedTF = UTexture2D::CreateTransient(TransferFunctionData::Resolution,
                                                   TransferFunctionData::Resolution, PF_FloatRGBA);
     PreIntegratedTF->Filter = TextureFilter::TF_Bilinear;
-    PreIntegratedTF->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
     PreIntegratedTF->AddressX = PreIntegratedTF->AddressY = TextureAddress::TA_Clamp;
 
     auto texDat = PreIntegratedTF->GetPlatformData()->Mips[0].BulkData.Lock(
